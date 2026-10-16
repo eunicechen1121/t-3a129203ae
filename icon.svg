@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#f3ead7"/>
+  <g stroke="#1d1b18" stroke-width="8" stroke-linejoin="round">
+    <path transform="translate(40 40) rotate(-14 60 54)" d="M60 102C27 78 6 57 6 33 6 15 21 6 34.5 6 45 6 54 12 60 21c6-9 15-15 25.5-15C99 6 114 15 114 33c0 24-21 45-54 69z" fill="#f191b6"/>
+    <path transform="translate(360 30) rotate(12 50 45)" d="M50 85C23 65 5 47 5 28 5 12 18 5 29 5 38 5 45 10 50 18c5-8 12-13 21-13C82 5 95 12 95 28c0 19-18 37-45 57z" fill="#5aaee3"/>
+    <path transform="translate(380 380) rotate(-8 50 45)" d="M50 85C23 65 5 47 5 28 5 12 18 5 29 5 38 5 45 10 50 18c5-8 12-13 21-13C82 5 95 12 95 28c0 19-18 37-45 57z" fill="#f2e45c"/>
+  </g>
+  <path d="M70 175 L442 160 L448 352 L64 362 Z" fill="#fbf6ea" stroke="#1d1b18" stroke-width="6"/>
+  <g font-family="Futura,'Arial Black',sans-serif" font-weight="900" font-size="150" stroke="#1d1b18" stroke-width="7" paint-order="stroke" text-anchor="middle">
+    <text x="175" y="318" fill="#3d8a3a" transform="rotate(-6 175 270)">F</text>
+    <text x="320" y="322" fill="#e64e2e" transform="rotate(5 320 270)">27</text>
+  </g>
+  <text x="256" y="450" font-family="Futura,'Arial Black',sans-serif" font-weight="900" font-size="54" fill="#1d1b18" text-anchor="middle" letter-spacing="4">LONDON</text>
+</svg>
