@@ -145,13 +145,14 @@ input.f:focus,select.f:focus,textarea.f:focus{background:#fffbe0}
 .sub{font-weight:800;font-size:14px;margin:12px 0 6px}
 details.imp>summary{list-style:none;cursor:pointer}
 details.imp>summary::-webkit-details-marker,details.sub2>summary::-webkit-details-marker{display:none}
-details.imp>summary::after{content:"▶";font-size:12px;margin-left:auto;transition:transform .15s}
-details.imp[open]>summary::after{transform:rotate(90deg)}
 details.sub2{background:var(--paper2);border:2px solid var(--ink);border-radius:10px;box-shadow:var(--shadow);margin:0 0 12px;padding:0 12px}
 details.sub2>summary{list-style:none;cursor:pointer;font-weight:800;padding:11px 0;display:flex;align-items:center}
-details.sub2>summary::after{content:"▶";font-size:11px;margin-left:auto;color:var(--muted);transition:transform .15s}
-details.sub2[open]>summary::after{transform:rotate(90deg)}
 details.sub2[open]{padding-bottom:12px}
+details.grp>summary,details.grp2>summary,details.imp>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px}
+details.grp>summary::-webkit-details-marker,details.grp2>summary::-webkit-details-marker{display:none}
+details.grp2{margin-bottom:4px}
+.caret{font-size:12px;color:var(--muted);margin-left:auto;transition:transform .15s;font-family:var(--sans);font-weight:400}
+details[open]>summary>.caret{transform:rotate(90deg)}
 .fg{font-weight:800;font-size:14px;margin:10px 0 6px}
 .bl{margin:0 0 6px;padding-left:20px;font-size:14px} .bl li{margin:3px 0}
 .tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1.5px solid var(--ink);border-radius:8px;background:#fff}
@@ -955,17 +956,18 @@ const BAGGAGE=[
   ["💧 液體",["每瓶不超過 100ml，全部裝進 1 個透明夾鏈袋（總量 1 公升以內），安檢時拿出來",
     "曼谷經停要再過一次安檢：桃園、希斯洛買的液體免稅品可能被沒收，要買就等曼谷安檢後"]]
 ];
-const openDetails=new Set();
-document.addEventListener("toggle",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k)e.target.open?openDetails.add(k):openDetails.delete(k)},true);
-const od=k=>`data-k="${k}" ${openDetails.has(k)?"open":""}`;
+const openState=JSON.parse(lsGet("lf27-open")||"{}");
+document.addEventListener("toggle",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k){openState[k]=e.target.open;lsSet("lf27-open",JSON.stringify(openState))}},true);
+const od=(k,def=false)=>`data-k="${esc(k)}" ${(k in openState?openState[k]:def)?"open":""}`;
+const CARET=`<span class="caret">▶</span>`;   // 跟行程卡片同一個收合符號
 function importantHtml(){
   const flights=FLIGHT_GROUPS.map(([t,rows,stop])=>`<div class="fg">${t}</div>
     <div class="tblwrap"><table class="ftbl"><thead><tr><th>機票</th><th>航班</th><th>起飛</th><th>抵達</th><th>飛行時間</th></tr></thead>
     <tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div><p class="hint">${stop}：要帶隨身行李下機、再過一次安檢；託運行李直掛不用領。</p>`).join("");
   const bag=BAGGAGE.map(([t,lines])=>`<div class="fg">${t}</div><ul class="bl">${lines.map(l=>`<li>${l}</li>`).join("")}</ul>`).join("");
-  return `<details class="imp" ${od("imp")}><summary class="sec" style="--sc:var(--orange)">重要資訊</summary>
-    <details class="sub2" ${od("bag")}><summary>行李尺寸＆規定</summary>${bag}<p class="hint">資料來源：長榮航空官網，2026/10/17 查。出發前再確認一次。</p></details>
-    <details class="sub2" ${od("flt")}><summary>班機資訊</summary>${flights}<p class="hint">時間都是當地時間。</p></details>
+  return `<details class="imp" ${od("imp")}><summary class="sec" style="--sc:var(--orange)">重要資訊${CARET}</summary>
+    <details class="sub2" ${od("bag")}><summary>行李尺寸＆規定${CARET}</summary>${bag}<p class="hint">資料來源：長榮航空官網，2026/10/17 查。出發前再確認一次。</p></details>
+    <details class="sub2" ${od("flt")}><summary>班機資訊${CARET}</summary>${flights}<p class="hint">時間都是當地時間。</p></details>
   </details>`;
 }
 function viewList(){
@@ -979,21 +981,21 @@ function viewList(){
   const todoBody=byDate
     ?`<div class="card" style="padding:4px 14px">${todo.map(checkRow).join("")||`<p class="muted">沒有待辦。</p>`}</div>`
     :cats.map(g=>{const items=todo.filter(c=>(c.cat||"其他")===g);if(!items.length)return"";
-      return `<div class="sub">${esc(g)} <span class="muted">${items.filter(c=>c.done).length}/${items.length}</span></div>
-      <div class="card" style="padding:4px 14px">${items.map(checkRow).join("")}</div>`}).join("");
+      return `<details class="grp2" ${od("todo:"+g,true)}><summary class="sub">${esc(g)} <span class="muted">${items.filter(c=>c.done).length}/${items.length}</span>${CARET}</summary>
+      <div class="card" style="padding:4px 14px">${items.map(checkRow).join("")}</div></details>`}).join("");
   return `<main>
     ${importantHtml()}
-    <div class="sec" style="--sc:var(--pink)">出發前待辦 <span class="muted">${tDone}/${todo.length}</span></div>
+    <details class="grp" ${od("todo",true)}><summary class="sec" style="--sc:var(--pink)">出發前待辦 <span class="muted">${tDone}/${todo.length}</span>${CARET}</summary>
     ${pct(todo.length?tDone/todo.length*100:0)}
     <div class="cats" style="margin:10px 0 2px"><button data-act="todoView" data-v="cat" class="${byDate?"":"on"}">依分類</button><button data-act="todoView" data-v="date" class="${byDate?"on":""}">依截止日</button></div>
     ${todoBody}
-    <button class="add" data-add="checklist" data-group="${TODO_GROUP}">＋ 新增待辦</button>
-    <div class="sec" style="--sc:var(--blue)">行李打包 <span class="muted">${pDone}/${pack.length}</span></div>
+    <button class="add" data-add="checklist" data-group="${TODO_GROUP}">＋ 新增待辦</button></details>
+    <details class="grp" ${od("pack",true)}><summary class="sec" style="--sc:var(--blue)">行李打包 <span class="muted">${pDone}/${pack.length}</span>${CARET}</summary>
     ${pct(pack.length?pDone/pack.length*100:0)}
     ${packGroups.map(g=>{const items=S.checklist.filter(c=>c.group===g);if(!items.length)return"";
-      return `<div class="sub">${esc(g)} <span class="muted">${items.filter(c=>c.done).length}/${items.length}</span></div>
-      <div class="card" style="padding:4px 14px">${items.map(checkRow).join("")}</div>`}).join("")}
-    <button class="add" data-add="checklist" data-group="證件">＋ 新增行李</button></main>`;
+      return `<details class="grp2" ${od("pack:"+g,true)}><summary class="sub">${esc(g)} <span class="muted">${items.filter(c=>c.done).length}/${items.length}</span>${CARET}</summary>
+      <div class="card" style="padding:4px 14px">${items.map(checkRow).join("")}</div></details>`}).join("")}
+    <button class="add" data-add="checklist" data-group="證件">＋ 新增行李</button></details></main>`;
 }
 
 /* ============ 編輯表單 ============ */
