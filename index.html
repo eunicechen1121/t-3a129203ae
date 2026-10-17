@@ -210,6 +210,32 @@ nav.tabs button:nth-child(4){--tc:var(--blue)} nav.tabs button:nth-child(5){--tc
 .st.booked{background:#8fd08a} .st.todo{background:var(--red);color:#fff} .st.none{background:#fff;color:var(--muted);border-color:var(--muted)}
 .chip.grn{background:var(--green);color:#fff}
 .row.pl .hd{grid-template-columns:minmax(0,1fr) 18px}
+.row:not(.pl) .hd{grid-template-columns:62px minmax(0,1fr) 26px 14px}
+.drag{font-size:20px;line-height:1;color:var(--muted);text-align:center;touch-action:none;cursor:grab;padding:2px 0;user-select:none;-webkit-user-select:none}
+.lock-ic{font-size:13px;text-align:center;opacity:.75}
+.ph{border:2px dashed var(--ink);border-radius:10px;margin:4px 8px;background:#fff8}
+.ghost{background:var(--paper2);box-shadow:4px 6px 0 var(--ink);border:2px solid var(--ink);border-radius:10px;opacity:.95}
+.leg{border-bottom:1.5px dashed var(--line);background:repeating-linear-gradient(90deg,transparent 0 6px,#00000005 6px 12px)}
+.leg .lhd{display:flex;align-items:center;gap:6px;padding:6px 12px 6px 82px;font-size:13px;color:var(--muted);font-weight:700;cursor:pointer}
+.leg .lic{font-size:15px}
+.leg .lt{background:var(--red);color:#fff;border:1.5px solid var(--ink);border-radius:99px;padding:0 7px;font-size:11px}
+.leg .ar{margin-left:auto;font-size:11px;transition:transform .15s}
+.leg.open .ar{transform:rotate(180deg)}
+.leg.late .lhd{color:#b8321a}
+.leg .lbd{display:none;padding:0 12px 12px 82px}
+.leg.open .lbd{display:block}
+.modes{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 8px}
+.modes button{border:1.5px solid var(--ink);background:#fff;border-radius:99px;padding:3px 10px;font-size:12px;font-weight:700}
+.modes button.on{background:var(--yellow);box-shadow:2px 2px 0 var(--ink)}
+.legadd{padding:2px 12px 2px 82px;border-bottom:1.5px dashed var(--line)}
+.legadd .chip{font-size:11px;padding:1px 8px;opacity:.7}
+.leg .dl{font-size:13px;margin:0 0 8px;display:grid;grid-template-columns:auto 1fr;gap:2px 8px}
+.leg .dl dt{color:var(--muted);font-weight:700} .leg .dl dd{margin:0;word-break:break-word}
+.leg .no{font-size:13px;white-space:pre-wrap;margin-bottom:8px}
+.leg .map{width:100%;height:200px;border:2px solid var(--ink);border-radius:10px;display:block;margin:6px 0 8px;background:#e9dcc3}
+.leg .mapoff{border:2px dashed var(--muted);border-radius:10px;padding:14px;font-size:13px;color:var(--muted);text-align:center;margin:6px 0 8px}
+.leg .acts{display:flex;gap:8px;flex-wrap:wrap}
+.leg .lbd{padding-left:24px}
 .row.pl .bd{padding-left:12px}
 .conflict{margin:8px 16px;padding:14px 14px 16px;background:var(--orange);clip-path:var(--torn);font-size:14px}
 .conflict .row2{margin-top:8px}
@@ -387,6 +413,30 @@ function normalize(d){
     }
     d.meta.placesV5=true;needSave=true;
   }
+  d.legs=d.legs||{};d.geo=d.geo||{};
+  for(const i of d.itinerary){
+    if(i.stay==null){i.stay=STAY_DEFAULT[i.kind]??60;needSave=true}
+    if(i.lock==null){i.lock=LOCK_DEFAULT.has(i.kind)?"1":"";needSave=true}
+  }
+  if(!d.meta.legsV6){
+    // 「回旅館…」沒填地點的，帶入已預約住宿的地點（名稱只存在加密資料裡）
+    const hotel=d.itinerary.find(i=>i.kind==="rest"&&i.status==="booked"&&(i.place||i.address));
+    if(hotel)for(const i of d.itinerary)if(!i.place&&!i.address&&/回旅館|回飯店/.test(i.title))i.place=hotel.place||hotel.address;
+    // 舊的「交通」項目：前後都有地點才轉成交通列，否則保留原樣，不弄丟內容
+    const drop=new Set();
+    for(const dd of DAYS){
+      const list=d.itinerary.filter(i=>i.day===dd).sort((x,y)=>(x.time||"").localeCompare(y.time||""));
+      list.forEach((m,k)=>{
+        if(m.kind!=="move")return;const a=list[k-1],b=list[k+1];
+        if(!(a&&b&&(a.place||a.address)&&(b.place||b.address)))return;
+        d.legs[a.id+">"+b.id]={mode:"transit",note:[m.title,m.note].filter(Boolean).join("\n")};drop.add(m.id);
+      });
+    }
+    d.itinerary=d.itinerary.filter(i=>!drop.has(i.id));
+    d.meta.legsV6=true;needSave=true;
+  }
+  const ids=new Set(d.itinerary.map(i=>i.id));
+  for(const k of Object.keys(d.legs)){const [x,y]=k.split(">");if(!ids.has(x)||!ids.has(y))delete d.legs[k]}
   return d;
 }
 let needSave=false;   // 資料轉換後要存檔並同步，在下一次 render 時處理
@@ -541,18 +591,130 @@ function renderBanner(){
 /* ---------- 行程 ---------- */
 const period=t=>!t?0:t<"12:00"?1:t<"18:00"?2:3;
 const PERIODS=["全天","早上","下午","晚上"];
+const STAY_DEFAULT={food:60,sight:90,rest:60,show:150,transit:90,flight:0,move:0,note:0};
+const LOCK_DEFAULT=new Set(["show","flight","transit"]);
+const MODES={walking:["🚶","步行","w"],transit:["🚇","大眾運輸","r"],driving:["🚗","開車","d"],bicycling:["🚲","騎車","b"]};
+const STEP_ICON={walking:"🚶",tube:"🚇",bus:"🚌",dlr:"🚈","elizabeth-line":"🚆",overground:"🚆","national-rail":"🚆",cycle:"🚲",river:"⛴️"};
+const toMin=t=>/^\d\d:\d\d$/.test(t||"")?(+t.slice(0,2))*60+(+t.slice(3)):null;
+const fromMin=m=>{m=((Math.round(m)%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0")};
+const ceil5=m=>Math.ceil(m/5)*5;
+const locOf=i=>i&&(i.place||i.address)||"";
+const isLocked=i=>i.lock==="1";
+const byTime=(a,b)=>(a.time||"").localeCompare(b.time||"")||((a.ord??0)-(b.ord??0));
+const itemsOfDay=d=>S.itinerary.filter(i=>i.day===d).sort(byTime);
+const legKey=(a,b)=>a.id+">"+b.id;
+// 前後兩項都有地點、而且不是同一個地點，才有交通列
+// 飛機、轉機本身就是移動，前後不加交通列
+const NO_LEG=new Set(["flight","transit"]);
+const legable=(a,b)=>!!(locOf(a)&&locOf(b)&&locOf(a)!==locOf(b)&&!NO_LEG.has(a.kind)&&!NO_LEG.has(b.kind));
+function legMin(L){
+  if(!L||L.hidden)return null;
+  if(L.manualMin!=null&&L.manualMin!=="")return +L.manualMin;
+  const r=L.r&&L.r[L.mode];return r&&r.min!=null?r.min:null;
+}
+const legBetween=(a,b)=>legable(a,b)?S.legs[legKey(a,b)]:null;
+const travelMin=(a,b)=>legMin(legBetween(a,b))||0;
+
+/* 重算時間：彈性行程＝上一項開始＋停留＋交通；固定行程不動 */
+function runRecalc(list){
+  let prevEnd=null,prev=null;
+  list.forEach((it,idx)=>{
+    if(!isLocked(it)&&prevEnd!=null)it.time=fromMin(ceil5(prevEnd+travelMin(prev,it)));
+    it.ord=idx;
+    const st=toMin(it.time);if(st!=null)prevEnd=st+(+it.stay||0);
+    prev=it;
+  });
+}
+let recalcPending=null;   // 拖曳後等交通時間算好，再重算一次
+
+/* 地點座標（Photon，免費）與倫敦交通局 TfL 路線（免費）；結果存進資料，離線也看得到 */
+async function geocode(q){
+  if(q in S.geo)return S.geo[q];
+  // 「名稱, 街道」這種搜尋字，用街道部分比較準（例：後台門會被認成同名酒吧）
+  const qq=q.includes(",")?q.slice(q.indexOf(",")+1).trim()+" London":q;
+  const j=await (await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(qq)}&limit=1&lat=51.51&lon=-0.13`)).json();
+  const f=j.features&&j.features[0];let v=null;
+  if(f){const [lon,lat]=f.geometry.coordinates;if(lat>51.28&&lat<51.70&&lon>-0.56&&lon<0.31)v=[+lat.toFixed(5),+lon.toFixed(5)]}
+  S.geo[q]=v;return v;
+}
+async function tfl(a,b,mode){
+  const m={walking:"walking",transit:"tube,bus,dlr,overground,elizabeth-line,national-rail,walking",bicycling:"cycle"}[mode];
+  if(!m)return {none:true};
+  const r=await fetch(`https://api.tfl.gov.uk/Journey/JourneyResults/${a[0]},${a[1]}/to/${b[0]},${b[1]}?mode=${m}`);
+  if(!r.ok)return {none:true};
+  const jr=((await r.json()).journeys||[]).sort((x,y)=>x.duration-y.duration)[0];
+  if(!jr)return {none:true};
+  const steps=jr.legs.map(l=>({m:l.mode.name,min:l.duration,line:(l.routeOptions&&l.routeOptions[0]&&l.routeOptions[0].name)||""}));
+  const fares=(jr.fare&&jr.fare.fares)||[];
+  return {min:jr.duration,steps,transfers:Math.max(0,steps.filter(s=>s.m!=="walking").length-1),
+    fare:jr.fare?jr.fare.totalCost:0,peak:fares.length===1?fares[0].peak:null,off:fares.length===1?fares[0].offPeak:null};
+}
+let legBusy=false,legNext=null;
+async function ensureLegs(d){
+  if(!navigator.onLine||!S)return;
+  if(legBusy){legNext=d;return}   // 正在算別天，算完再來
+  legBusy=true;let changed=false;
+  try{
+    const list=itemsOfDay(d);
+    for(let k=1;k<list.length;k++){
+      const a=list[k-1],b=list[k];if(!legable(a,b))continue;
+      const key=legKey(a,b),L=S.legs[key]||(S.legs[key]={});
+      if(L.hidden)continue;
+      const done=m=>L.r&&L.r[m];
+      if(L.mode&&(L.mode==="driving"||done(L.mode)))continue;
+      const ga=await geocode(locOf(a)),gb=await geocode(locOf(b));changed=true;
+      L.r=L.r||{};
+      if(!ga||!gb){L.mode=L.mode||"transit";L.r[L.mode]={none:true};continue}
+      if(!L.mode){L.r.walking=await tfl(ga,gb,"walking");L.mode=L.r.walking.min!=null&&L.r.walking.min<=15?"walking":"transit"}
+      if(!done(L.mode))L.r[L.mode]=await tfl(ga,gb,L.mode);
+    }
+  }catch(_){/* 網路不穩，下次再算 */}
+  finally{legBusy=false}
+  if(legNext&&legNext!==d){const n=legNext;legNext=null;setTimeout(()=>ensureLegs(n),0)}else legNext=null;
+  if(changed){
+    if(recalcPending===d){runRecalc(itemsOfDay(d));recalcPending=null}
+    save();if(!dragging&&tab==="plan"&&day===d)render();
+  }
+}
+function legHtml(a,b,late){
+  const key=legKey(a,b),L=S.legs[key]||{};
+  if(L.hidden)return `<div class="legadd"><button class="chip" data-legshow="${key}">＋ 交通</button></div>`;
+  const mode=L.mode||"transit",[ic,label,flg]=MODES[mode],r=L.r&&L.r[mode],min=legMin(L);
+  const open=openRows.has(key);
+  const est=min!=null?`${min} 分`:mode==="driving"?"開 Google Maps 看":r&&r.none?"倫敦以外，開 Google Maps 看":navigator.onLine?"計算中…":"連網後計算";
+  const o=encodeURIComponent(locOf(a)),dst=encodeURIComponent(locOf(b));
+  const gm=`https://www.google.com/maps/dir/?api=1&origin=${o}&destination=${dst}&travelmode=${mode}`;
+  const map=navigator.onLine?`<iframe class="map" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?saddr=${o}&daddr=${dst}&dirflg=${flg}&output=embed"></iframe>`:`<div class="mapoff">離線中：路線圖要有網路才看得到</div>`;
+  const pounds=p=>"£"+(p/100).toFixed(2);
+  const info=[];
+  if(r&&r.steps)info.push(["路線",r.steps.map(s=>`${STEP_ICON[s.m]||"•"} ${s.line&&s.m!=="walking"?esc(s.line)+" ":""}${s.min} 分`).join(" → ")]);
+  if(r&&r.transfers!=null&&mode==="transit")info.push(["轉乘",r.transfers?`${r.transfers} 次`:"不用轉乘"]);
+  if(r&&r.fare!=null&&!r.none)info.push(["票價",r.fare?`約 ${pounds(r.fare)}${r.peak&&r.off?`（尖峰 ${pounds(r.peak)}／離峰 ${pounds(r.off)}）`:""}`:"免費"]);
+  if(L.manualMin!=null&&L.manualMin!=="")info.push(["時間","手動設定"]);
+  return `<div class="leg ${open?"open":""} ${late?"late":""}">
+    <div class="lhd" data-toggle="${key}"><span class="lic">${ic}</span><span>${label}・${est}</span>${late?`<span class="lt">⏰ 時間不夠</span>`:""}<span class="ar">▾</span></div>
+    <div class="lbd">
+      <div class="modes">${Object.entries(MODES).map(([m,[i,l]])=>`<button class="${m===mode?"on":""}" data-legmode="${key}|${m}">${i} ${l}</button>`).join("")}</div>
+      ${info.length?`<dl class="dl">${info.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`:""}
+      ${L.note?`<div class="no">${esc(L.note)}</div>`:""}
+      ${map}
+      <div class="acts"><a class="chip grn" href="${gm}" target="_blank" rel="noopener">🧭 Google Maps 路線</a><button class="chip" data-legmin="${key}">⏱ 改時間</button><button class="chip" data-legnote="${key}">✎ 備註</button><button class="chip" data-leghide="${key}">✕ 刪除這段交通</button></div>
+      ${mode==="transit"&&r&&r.fare?`<p class="hint">用感應卡搭車有每日上限，票價只是參考。</p>`:""}
+    </div></div>`;
+}
 function rowHtml(i){
   const open=openRows.has(i.id);
   const first=(i.note||"").split("\n")[0];
   const st=i.status&&STATUS[i.status]?`<span class="st ${i.status}">${STATUS[i.status]}</span>`:"";
-  const det=[["地址",i.address],["營業時間",i.hours],["價位",i.price]].filter(([,v])=>v);
+  const det=[["地址",i.address],["營業時間",i.hours],["價位",i.price],["停留",i.stay?`${i.stay} 分`:""]].filter(([,v])=>v);
   const web=safeUrl(i.web);
   const q=i.place||i.address;
   const map=q?(navigator.onLine?(`<iframe class="map" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=15&output=embed"></iframe>`):`<div class="mapoff">離線中：地圖要有網路才看得到</div>`):"";
-  return `<div class="row ${i.kind} ${open?"open":""}">
+  return `<div class="row ${i.kind} ${open?"open":""}" data-id="${i.id}">
     <div class="hd" data-toggle="${i.id}">
       <div><div class="tm">${esc(i.time||"—")}</div><div class="kd"><i></i>${KINDS[i.kind]||""}</div>${i.tz?`<span class="tz">${esc(i.tz)}時間</span>`:""}</div>
       <div><div class="tt">${esc(i.title)}${st}</div>${first?`<div class="sm">${esc(first)}</div>`:""}</div>
+      ${isLocked(i)?`<div class="lock-ic" title="時間固定">🔒</div>`:`<div class="drag" aria-label="拖曳排序">≡</div>`}
       <div class="ar">▶</div>
     </div>
     <div class="bd">
@@ -565,17 +727,61 @@ function rowHtml(i){
 function viewPlan(){
   const showDays=new Set(S.itinerary.filter(i=>i.kind==="show").map(i=>i.day));
   const strip=`<div class="dates" id="dates">${DAYS.map(d=>{const p=dParts(d);return `<div class="date ${d===day?"on":""} ${showDays.has(d)?"has-show":""}" data-day="${d}"><div class="w">週${p.w}</div><div class="d">${p.d}</div><div class="m">${p.m}月</div></div>`}).join("")}</div>`;
-  const items=S.itinerary.filter(i=>i.day===day).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+  const items=itemsOfDay(day);
   const p=dParts(day), n=DAYS.indexOf(day)+1;
+  // 每一項前面放「從上一項過來」的交通列
+  const pre={};
+  items.forEach((it,k)=>{
+    const a=items[k-1];if(!a||!legable(a,it))return;
+    const L=S.legs[legKey(a,it)],m=legMin(L),sa=toMin(a.time),sb=toMin(it.time);
+    const late=!!(L&&!L.hidden&&m!=null&&sa!=null&&sb!=null&&sa+(+a.stay||0)+m>sb+5);   // 差 5 分以內不算
+    pre[it.id]=legHtml(a,it,late);
+  });
   const groups=[0,1,2,3].map(k=>items.filter(i=>period(i.time)===k));
   return strip+`<main>
     <div class="dayhd"><div class="dn"><span>DAY ${n}</span><span>2027 / ${String(p.m).padStart(2,"0")} / ${String(p.d).padStart(2,"0")}</span></div>
       <h2>${p.m}/${p.d}（${p.w}）</h2>
       <div class="area">${esc(S.days[day]||"")}<button class="x" data-act="editDay" aria-label="改區域名">✎</button></div>
       ${wxHtml(day)}</div>
-    ${groups.map((g,k)=>g.length?`<div class="per p${k}">${PERIODS[k]}</div><div class="rows">${g.map(rowHtml).join("")}</div>`:"").join("")||`<p class="muted">這天還沒有行程。</p>`}
-    <button class="add" data-add="itinerary" style="margin-top:16px">＋ 新增行程</button></main>`;
+    ${groups.map((g,k)=>g.length?`<div class="per p${k}">${PERIODS[k]}</div><div class="rows">${g.map(i=>(pre[i.id]||"")+rowHtml(i)).join("")}</div>`:"").join("")||`<p class="muted">這天還沒有行程。</p>`}
+    <p class="hint">按住 ≡ 可以拖曳排序；🔒 是固定時間的行程。拖曳後其他行程的時間會自動重算。</p>
+    <button class="add" data-add="itinerary" style="margin-top:8px">＋ 新增行程</button></main>`;
 }
+
+/* ---------- 拖曳排序（同一天） ---------- */
+let dragging=null;
+document.addEventListener("pointerdown",e=>{
+  const h=e.target.closest(".drag");if(!h||!S||tab!=="plan")return;
+  e.preventDefault();e.stopPropagation();
+  const row=h.closest(".row"),rect=row.getBoundingClientRect();
+  const ghost=row.cloneNode(true);ghost.classList.add("ghost");
+  Object.assign(ghost.style,{position:"fixed",left:rect.left+"px",top:rect.top+"px",width:rect.width+"px",zIndex:50,pointerEvents:"none"});
+  const ph=document.createElement("div");ph.className="ph";ph.style.height=rect.height+"px";
+  row.after(ph);row.style.display="none";document.body.appendChild(ghost);
+  document.querySelectorAll("#view .leg,#view .legadd").forEach(x=>x.style.display="none");
+  const firstTime=(itemsOfDay(day)[0]||{}).time;
+  dragging={row,ghost,ph,dy:e.clientY-rect.top,id:row.dataset.id,firstTime,moved:false};
+  try{h.setPointerCapture(e.pointerId)}catch(_){}
+},{passive:false});
+document.addEventListener("pointermove",e=>{
+  if(!dragging)return;e.preventDefault();dragging.moved=true;
+  dragging.ghost.style.top=(e.clientY-dragging.dy)+"px";
+  const rows=[...document.querySelectorAll("#view .row[data-id]")].filter(r=>r!==dragging.row);
+  const before=rows.find(r=>{const b=r.getBoundingClientRect();return e.clientY<b.top+b.height/2});
+  if(before)before.before(dragging.ph);else if(rows.length)rows[rows.length-1].after(dragging.ph);
+  if(e.clientY<90)scrollBy(0,-14);else if(e.clientY>innerHeight-110)scrollBy(0,14);
+},{passive:false});
+function endDrag(){
+  if(!dragging)return;const g=dragging;dragging=null;g.ghost.remove();
+  if(!g.moved){render();return}
+  const ids=[...document.querySelectorAll("#view .row[data-id],#view .ph")].filter(el=>el!==g.row).map(el=>el.classList.contains("ph")?g.id:el.dataset.id);
+  const list=ids.map(id=>S.itinerary.find(i=>i.id===id)).filter(Boolean);
+  const moved=list[0];
+  if(moved&&moved.id===g.id&&!isLocked(moved)&&g.firstTime)moved.time=g.firstTime;   // 拖到最前面就接手原本第一項的時間
+  runRecalc(list);recalcPending=day;save();render();toast("已重新排序，時間已更新");
+}
+document.addEventListener("pointerup",endDrag);
+document.addEventListener("pointercancel",endDrag);
 
 /* ---------- 記帳 ---------- */
 function viewMoney(){
@@ -696,7 +902,7 @@ function viewList(){
 
 /* ============ 編輯表單 ============ */
 const FORMS={
-  itinerary:{title:"行程",fields:[["day","日期","select",DAYS.map(d=>{const p=dParts(d);return[d,`${p.m}/${p.d}（${p.w}）`]})],["time","時間","time"],["tz","時區（飛機用）","select",[["","—"],...TZS.map(t=>[t,t+"時間"])]],["kind","類型","select",Object.entries(KINDS)],["title","內容","text"],["status","預約","select",[["","—"],...Object.entries(STATUS)]],["note","備註","textarea"],["place","地圖搜尋字","text"],["address","地址","text"],["hours","營業時間","text"],["price","價位","text"],["web","官網（https://…）","text"]]},
+  itinerary:{title:"行程",fields:[["day","日期","select",DAYS.map(d=>{const p=dParts(d);return[d,`${p.m}/${p.d}（${p.w}）`]})],["time","時間","time"],["tz","時區（飛機用）","select",[["","—"],...TZS.map(t=>[t,t+"時間"])]],["kind","類型","select",Object.entries(KINDS)],["title","內容","text"],["status","預約","select",[["","—"],...Object.entries(STATUS)]],["stay","停留時間（分鐘）","number"],["lock","時間","select",[["","彈性（拖曳後自動算）"],["1","🔒 固定"]]],["note","備註","textarea"],["place","地圖搜尋字","text"],["address","地址","text"],["hours","營業時間","text"],["price","價位","text"],["web","官網（https://…）","text"]]},
   shows:{title:"戲票",fields:[["title","劇名","text"],["date","日期","date"],["time","時間","time"],["venue","劇院","text"],["status","狀態","select",SHOW_STATUS.map(s=>[s,s])],["price","價格","text"],["note","備註","textarea"]]},
   places:{title:"地點",fields:[["name","名稱","text"],["cat","分類（住／劇院／吃／逛／交通…）","text"],["desc","簡介（這裡有什麼、推薦什麼）","textarea"],["hours","營業時間","text"],["price","消費區間","text"],["address","地址","text"],["web","官網（https://…）","text"],["query","地圖搜尋字","text"],["note","我的備註","textarea"]]},
   // where＝group 和 cat 合成一個選單：「出發前|購票」或「證件」
@@ -720,11 +926,18 @@ function openForm(coll,id,group){
   openSheet(`<h3>${isNew?"新增":"編輯"}${F.title}</h3><form id="frm">${F.fields.map(field).join("")}
     <div class="foot">${isNew?"":`<button type="button" class="btn danger" data-del="${coll}" data-id="${id}">刪除</button>`}
     <button type="button" class="btn ghost" data-act="close">取消</button><button type="submit" class="btn solid" style="flex:1">儲存</button></div></form>`);
+  const before={stay:obj.stay,lock:obj.lock,loc:locOf(obj),day:obj.day};
   $("#frm").onsubmit=e=>{e.preventDefault();const fd=new FormData(e.target);
     F.fields.forEach(([k,,t])=>{let v=fd.get(k)??"";if(t==="number")v=parseFloat(String(v).replace(/,/g,""))||0;obj[k]=v});
     if(coll==="checklist"){const [g,c]=obj.where.split("|");obj.group=g;obj.cat=c||"";delete obj.where}
     if(isNew){obj.id=uid();if(coll==="checklist")obj.done=false;S[coll].push(obj)}
-    if(coll==="itinerary"){day=obj.day;openRows.add(obj.id)}
+    if(coll==="itinerary"){
+      day=obj.day;openRows.add(obj.id);
+      if(isNew){obj.stay=obj.stay||STAY_DEFAULT[obj.kind]||60}
+      // 地點改了，跟它相關的交通要重算
+      if(locOf(obj)!==before.loc)for(const [k,L] of Object.entries(S.legs))if(k.split(">").includes(obj.id))delete L.r,delete L.mode;
+      if(!isNew&&(+obj.stay!==+before.stay||obj.lock!==before.lock))runRecalc(itemsOfDay(obj.day));
+    }
     save();closeSheet();render();toast("已儲存");};
 }
 function openDayForm(){
@@ -783,6 +996,18 @@ async function exportData(){
 /* ============ 事件 ============ */
 document.addEventListener("click",async e=>{
   if(e.target.closest("a"))return;   // 連結照常開啟（地圖、官網、天氣）
+  if(e.target.closest(".drag"))return;
+  const lg=e.target.closest("[data-legmode],[data-legmin],[data-legnote],[data-leghide],[data-legshow]");
+  if(lg&&S){
+    const v=lg.dataset;
+    if(v.legmode){const [k,m]=v.legmode.split("|");const L=S.legs[k]||(S.legs[k]={});L.mode=m;L.manualMin="";save();render();ensureLegs(day);return}
+    const k=v.legmin||v.legnote||v.leghide||v.legshow,L=S.legs[k]||(S.legs[k]={});
+    if(v.legmin){const x=prompt("這段交通要幾分鐘？（留空＝用自動估算）",L.manualMin??"");if(x===null)return;L.manualMin=x.trim()===""?"":Math.max(0,parseInt(x)||0)}
+    if(v.legnote){const x=prompt("交通備註",L.note||"");if(x===null)return;L.note=x}
+    if(v.leghide){if(!confirm("刪除這段交通？之後可以按「＋ 交通」加回來"))return;L.hidden=true}
+    if(v.legshow){L.hidden=false}
+    save();render();if(v.legshow)ensureLegs(day);return;
+  }
   const t=e.target.closest("[data-tab],[data-day],[data-add],[data-edit],[data-del],[data-act],[data-cat],[data-delexp],[data-toggle]");
   if(!t||!S&&!["syncNow"].includes(t.dataset.act)) return;
   const d=t.dataset;
@@ -825,7 +1050,7 @@ function render(){
   if(needSave){needSave=false;save()}
   renderTabs();renderCountdown();renderBanner();renderSync();
   $("#view").innerHTML={plan:viewPlan,money:viewMoney,shows:viewShows,places:viewPlaces,list:viewList}[tab]();
-  if(tab==="plan"){const on=document.querySelector(".date.on"),st=$("#dates");if(on&&st)st.scrollLeft=on.offsetLeft-(st.clientWidth-on.clientWidth)/2}
+  if(tab==="plan"){const on=document.querySelector(".date.on"),st=$("#dates");if(on&&st)st.scrollLeft=on.offsetLeft-(st.clientWidth-on.clientWidth)/2;ensureLegs(day)}
 }
 boot().then(fetchWeather);
 
