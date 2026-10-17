@@ -489,6 +489,17 @@ function normalize(d){
     }
     d.meta.hotelV7=true;needSave=true;
   }
+  if(!d.meta.f4V8){
+    // 2026-10-18 加買 Falsettos 第四場（2/25 19:30）。座位不放公開程式，橙自己補在備註
+    if(!d.shows.some(x=>x.date==="2027-02-25"&&/Falsettos/.test(x.title)))
+      d.shows.push({id:uid(),date:"2027-02-25",time:"19:30",title:"Falsettos in Concert ④",venue:"London Palladium",status:"已買",price:"£174.5",note:""});
+    if(!d.fixed.some(x=>/Falsettos ④/.test(x.name)))d.fixed.push({id:uid(),name:"Falsettos ④（£174.5）",twd:7497});
+    const f4={title:"Falsettos ④",note:"The London Palladium，8 Argyll St\n從旅館走路約 10 分",place:"London Palladium",address:"",status:"booked",lock:"1",stay:150,time:"19:30",kind:"show"};
+    const old=d.itinerary.find(i=>i.day==="2027-02-25"&&i.kind==="show"&&/RENT|被詛咒/.test(i.title));
+    if(old)Object.assign(old,f4);
+    else if(!d.itinerary.some(i=>i.day==="2027-02-25"&&/Falsettos/.test(i.title)))d.itinerary.push({id:uid(),day:"2027-02-25",tz:"",hours:"",price:"",web:"",...f4});
+    d.meta.f4V8=true;needSave=true;
+  }
   const ids=new Set(d.itinerary.map(i=>i.id));
   for(const k of Object.keys(d.legs)){const [x,y]=k.split(">");if(!ids.has(x)||!ids.has(y))delete d.legs[k]}
   return d;
