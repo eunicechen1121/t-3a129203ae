@@ -213,6 +213,7 @@ nav.tabs button:nth-child(4){--tc:var(--blue)} nav.tabs button:nth-child(5){--tc
 .row:not(.pl) .hd{grid-template-columns:62px minmax(0,1fr) 26px 14px}
 .drag{font-size:20px;line-height:1;color:var(--muted);text-align:center;touch-action:none;cursor:grab;padding:2px 0;user-select:none;-webkit-user-select:none}
 .lock-ic{font-size:13px;text-align:center;opacity:.75}
+.tm .nd{font-size:10px;margin-left:2px;color:var(--red)}
 .ph{border:2px dashed var(--ink);border-radius:10px;margin:4px 8px;background:#fff8}
 .ghost{background:var(--paper2);box-shadow:4px 6px 0 var(--ink);border:2px solid var(--ink);border-radius:10px;opacity:.95}
 .leg{border-bottom:1.5px dashed var(--line);background:repeating-linear-gradient(90deg,transparent 0 6px,#00000005 6px 12px)}
@@ -435,6 +436,23 @@ function normalize(d){
     d.itinerary=d.itinerary.filter(i=>!drop.has(i.id));
     d.meta.legsV6=true;needSave=true;
   }
+  if(!d.meta.hotelV7){
+    const hotel=d.itinerary.find(i=>i.kind==="rest"&&i.status==="booked"&&(i.place||i.address));
+    if(hotel){
+      const hq=hotel.place||hotel.address, at=i=>(i.place||i.address)===hq;
+      const days=DAYS.filter(dd=>d.itinerary.some(i=>i.day===dd&&at(i)));
+      const first=DAYS.indexOf(hotel.day), last=DAYS.indexOf(days[days.length-1]);
+      const sorted=dd=>d.itinerary.filter(i=>i.day===dd).sort((x,y)=>(x.time||"").localeCompare(y.time||""));
+      const mk=(dd,title,time,anchor)=>({id:uid(),day:dd,time,kind:"rest",title,note:"",place:hq,tz:"",status:"",hours:"",price:"",address:"",web:"",stay:0,lock:"",autoAnchor:anchor});
+      DAYS.forEach((dd,k)=>{
+        const list=sorted(dd);if(!list.length)return;
+        const f=list[0],l=list[list.length-1];
+        if(k>first&&k<=last&&!at(f)){const t=toMin(f.time);d.itinerary.push(mk(dd,"🏨 從旅館出發",t!=null?fromMin(t-20):"09:00","start"))}
+        if(k>=first&&k<last&&!at(l)){const t=toMin(l.time);d.itinerary.push(mk(dd,"🏨 回到旅館",t!=null?fromMin(t+(+l.stay||0)+20):"22:00","end"))}
+      });
+    }
+    d.meta.hotelV7=true;needSave=true;
+  }
   const ids=new Set(d.itinerary.map(i=>i.id));
   for(const k of Object.keys(d.legs)){const [x,y]=k.split(">");if(!ids.has(x)||!ids.has(y))delete d.legs[k]}
   return d;
@@ -596,7 +614,9 @@ const LOCK_DEFAULT=new Set(["show","flight","transit"]);
 const MODES={walking:["🚶","步行","w"],transit:["🚇","大眾運輸","r"],driving:["🚗","開車","d"],bicycling:["🚲","騎車","b"]};
 const STEP_ICON={walking:"🚶",tube:"🚇",bus:"🚌",dlr:"🚈","elizabeth-line":"🚆",overground:"🚆","national-rail":"🚆",cycle:"🚲",river:"⛴️"};
 const toMin=t=>/^\d\d:\d\d$/.test(t||"")?(+t.slice(0,2))*60+(+t.slice(3)):null;
-const fromMin=m=>{m=((Math.round(m)%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0")};
+const fromMin=m=>{m=Math.min(Math.max(Math.round(m),0),29*60+59);return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0")};
+// 畫面顯示：24:50 → 00:50＋1
+const showTime=t=>{const m=toMin(t);return m!=null&&m>=1440?`${fromMin(m-1440)}<small class="nd">+1</small>`:esc(t||"—")};
 const ceil5=m=>Math.ceil(m/5)*5;
 const locOf=i=>i&&(i.place||i.address)||"";
 const isLocked=i=>i.lock==="1";
@@ -625,7 +645,14 @@ function runRecalc(list){
     prev=it;
   });
 }
-let recalcPending=null;   // 拖曳後等交通時間算好，再重算一次
+let recalcPending=null;
+function adjustAnchors(d){
+  const list=itemsOfDay(d);
+  list.forEach((it,k)=>{
+    if(it.autoAnchor==="start"&&list[k+1]){const nx=list[k+1],m=legMin(legBetween(it,nx)),t=toMin(nx.time);if(m!=null&&t!=null)it.time=fromMin(Math.floor((t-m)/5)*5)}
+    if(it.autoAnchor==="end"&&list[k-1]){const pv=list[k-1],m=legMin(legBetween(pv,it)),t=toMin(pv.time);if(m!=null&&t!=null)it.time=fromMin(ceil5(t+(+pv.stay||0)+m))}
+  });
+}   // 拖曳後等交通時間算好，再重算一次
 
 /* 地點座標（Photon，免費）與倫敦交通局 TfL 路線（免費）；結果存進資料，離線也看得到 */
 async function geocode(q){
@@ -673,6 +700,7 @@ async function ensureLegs(d){
   if(legNext&&legNext!==d){const n=legNext;legNext=null;setTimeout(()=>ensureLegs(n),0)}else legNext=null;
   if(changed){
     if(recalcPending===d){runRecalc(itemsOfDay(d));recalcPending=null}
+    adjustAnchors(d);
     save();if(!dragging&&tab==="plan"&&day===d)render();
   }
 }
@@ -712,7 +740,7 @@ function rowHtml(i){
   const map=q?(navigator.onLine?(`<iframe class="map" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=15&output=embed"></iframe>`):`<div class="mapoff">離線中：地圖要有網路才看得到</div>`):"";
   return `<div class="row ${i.kind} ${open?"open":""}" data-id="${i.id}">
     <div class="hd" data-toggle="${i.id}">
-      <div><div class="tm">${esc(i.time||"—")}</div><div class="kd"><i></i>${KINDS[i.kind]||""}</div>${i.tz?`<span class="tz">${esc(i.tz)}時間</span>`:""}</div>
+      <div><div class="tm">${showTime(i.time)}</div><div class="kd"><i></i>${KINDS[i.kind]||""}</div>${i.tz?`<span class="tz">${esc(i.tz)}時間</span>`:""}</div>
       <div><div class="tt">${esc(i.title)}${st}</div>${first?`<div class="sm">${esc(first)}</div>`:""}</div>
       ${isLocked(i)?`<div class="lock-ic" title="時間固定">🔒</div>`:`<div class="drag" aria-label="拖曳排序">≡</div>`}
       <div class="ar">▶</div>
@@ -778,7 +806,7 @@ function endDrag(){
   const list=ids.map(id=>S.itinerary.find(i=>i.id===id)).filter(Boolean);
   const moved=list[0];
   if(moved&&moved.id===g.id&&!isLocked(moved)&&g.firstTime)moved.time=g.firstTime;   // 拖到最前面就接手原本第一項的時間
-  runRecalc(list);recalcPending=day;save();render();toast("已重新排序，時間已更新");
+  runRecalc(list);adjustAnchors(day);recalcPending=day;save();render();toast("已重新排序，時間已更新");
 }
 document.addEventListener("pointerup",endDrag);
 document.addEventListener("pointercancel",endDrag);
@@ -916,6 +944,7 @@ function openForm(coll,id,group){
   const base={itinerary:{day,time:"",kind:"sight"},shows:{date:"2027-02-22",time:"19:30",status:"抽籤中"},places:{cat:"吃"},checklist:{group:group||TODO_GROUP,cat:(group||TODO_GROUP)===TODO_GROUP?"其他":""},fixed:{}}[coll];
   const obj=isNew?Object.assign({},base):S[coll].find(x=>x.id===id); if(!obj) return;
   const vals=Object.assign({},obj);
+  if(coll==="itinerary"&&toMin(obj.time)>=1440)vals.time=fromMin(toMin(obj.time)-1440);
   if(coll==="checklist") vals.where=obj.group===TODO_GROUP?TODO_GROUP+"|"+(obj.cat||"其他"):obj.group;
   const field=([k,l,t,opts])=>{const v=vals[k]??"";
     // 舊資料的值不在選項裡時保留它，避免一打開編輯就被改成第一個選項
@@ -926,14 +955,16 @@ function openForm(coll,id,group){
   openSheet(`<h3>${isNew?"新增":"編輯"}${F.title}</h3><form id="frm">${F.fields.map(field).join("")}
     <div class="foot">${isNew?"":`<button type="button" class="btn danger" data-del="${coll}" data-id="${id}">刪除</button>`}
     <button type="button" class="btn ghost" data-act="close">取消</button><button type="submit" class="btn solid" style="flex:1">儲存</button></div></form>`);
-  const before={stay:obj.stay,lock:obj.lock,loc:locOf(obj),day:obj.day};
+  const before={stay:obj.stay,lock:obj.lock,loc:locOf(obj),day:obj.day,time:obj.time};
   $("#frm").onsubmit=e=>{e.preventDefault();const fd=new FormData(e.target);
     F.fields.forEach(([k,,t])=>{let v=fd.get(k)??"";if(t==="number")v=parseFloat(String(v).replace(/,/g,""))||0;obj[k]=v});
+    if(coll==="itinerary"&&toMin(before.time)>=1440&&obj.time&&obj.time<"06:00")obj.time=fromMin(toMin(obj.time)+1440);
     if(coll==="checklist"){const [g,c]=obj.where.split("|");obj.group=g;obj.cat=c||"";delete obj.where}
     if(isNew){obj.id=uid();if(coll==="checklist")obj.done=false;S[coll].push(obj)}
     if(coll==="itinerary"){
       day=obj.day;openRows.add(obj.id);
       if(isNew){obj.stay=obj.stay||STAY_DEFAULT[obj.kind]||60}
+      if(!isNew&&obj.autoAnchor)delete obj.autoAnchor;
       // 地點改了，跟它相關的交通要重算
       if(locOf(obj)!==before.loc)for(const [k,L] of Object.entries(S.legs))if(k.split(">").includes(obj.id))delete L.r,delete L.mode;
       if(!isNew&&(+obj.stay!==+before.stay||obj.lock!==before.lock))runRecalc(itemsOfDay(obj.day));
@@ -1000,13 +1031,13 @@ document.addEventListener("click",async e=>{
   const lg=e.target.closest("[data-legmode],[data-legmin],[data-legnote],[data-leghide],[data-legshow]");
   if(lg&&S){
     const v=lg.dataset;
-    if(v.legmode){const [k,m]=v.legmode.split("|");const L=S.legs[k]||(S.legs[k]={});L.mode=m;L.manualMin="";save();render();ensureLegs(day);return}
+    if(v.legmode){const [k,m]=v.legmode.split("|");const L=S.legs[k]||(S.legs[k]={});L.mode=m;L.manualMin="";adjustAnchors(day);save();render();ensureLegs(day);return}
     const k=v.legmin||v.legnote||v.leghide||v.legshow,L=S.legs[k]||(S.legs[k]={});
     if(v.legmin){const x=prompt("這段交通要幾分鐘？（留空＝用自動估算）",L.manualMin??"");if(x===null)return;L.manualMin=x.trim()===""?"":Math.max(0,parseInt(x)||0)}
     if(v.legnote){const x=prompt("交通備註",L.note||"");if(x===null)return;L.note=x}
     if(v.leghide){if(!confirm("刪除這段交通？之後可以按「＋ 交通」加回來"))return;L.hidden=true}
     if(v.legshow){L.hidden=false}
-    save();render();if(v.legshow)ensureLegs(day);return;
+    adjustAnchors(day);save();render();if(v.legshow)ensureLegs(day);return;
   }
   const t=e.target.closest("[data-tab],[data-day],[data-add],[data-edit],[data-del],[data-act],[data-cat],[data-delexp],[data-toggle]");
   if(!t||!S&&!["syncNow"].includes(t.dataset.act)) return;
