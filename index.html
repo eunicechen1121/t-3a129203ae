@@ -214,6 +214,25 @@ nav.tabs button:nth-child(4){--tc:var(--blue)} nav.tabs button:nth-child(5){--tc
 .drag{font-size:20px;line-height:1;color:var(--muted);text-align:center;touch-action:none;cursor:grab;padding:2px 0;user-select:none;-webkit-user-select:none}
 .lock-ic{font-size:13px;text-align:center;opacity:.75}
 .tm .nd{font-size:10px;margin-left:2px;color:var(--red)}
+/* 行程頁：每個行程是獨立紙片；交通是紙片之間的彩色點線（路線圖風），不是紙片 */
+.rows.plan{background:transparent;border:0;box-shadow:none;overflow:visible}
+.rows.plan .row{background:var(--paper2);border:2px solid var(--ink);border-radius:10px;box-shadow:var(--shadow)}
+.rows.plan .row.show{background:var(--pink)} .rows.plan .row.transit{background:#efe7fb}
+.rows.plan .row+.row,.rows.plan .legadd+.row{margin-top:12px}
+.rows.plan .leg{position:relative;background:none;border:0;--mc:#8fd08a}
+.rows.plan .leg.m-transit{--mc:var(--blue)} .rows.plan .leg.m-driving{--mc:var(--orange)} .rows.plan .leg.m-bicycling{--mc:var(--yellow)}
+.rows.plan .leg::before{content:"";position:absolute;left:34px;top:0;bottom:0;border-left:4px dotted var(--mc)}
+.rows.plan .leg .lhd{position:relative;display:flex;align-items:center;gap:10px;padding:12px 4px 12px 21px;font-size:13px;font-weight:700;color:var(--ink)}
+.rows.plan .leg .ldot{width:30px;height:30px;flex:0 0 30px;border-radius:50%;background:var(--mc);border:2px solid var(--ink);display:grid;place-items:center;font-size:14px;box-shadow:2px 2px 0 var(--ink)}
+.rows.plan .leg .lmin{font-family:var(--chunky);font-weight:900;font-size:17px}
+.rows.plan .leg .llb{color:var(--muted)}
+.rows.plan .leg.late .lmin{color:#b8321a}
+.rows.plan .leg .lt{background:none;border:0;color:#b8321a;font-size:12px;padding:0}
+.rows.plan .leg .ar{margin-left:auto}
+.rows.plan .leg .lbd{position:relative;padding:0 4px 12px 62px}
+.rows.plan .legadd{border:0;padding:6px 0 6px 21px;position:relative}
+.rows.plan .legadd::before{content:"";position:absolute;left:34px;top:0;bottom:0;border-left:3px dotted var(--line)}
+.rows.plan .legadd .chip{position:relative}
 .ph{border:2px dashed var(--ink);border-radius:10px;margin:4px 8px;background:#fff8}
 .ghost{background:var(--paper2);box-shadow:4px 6px 0 var(--ink);border:2px solid var(--ink);border-radius:10px;opacity:.95}
 .leg{border-bottom:1.5px dashed var(--line);background:repeating-linear-gradient(90deg,transparent 0 6px,#00000005 6px 12px)}
@@ -719,8 +738,8 @@ function legHtml(a,b,late){
   if(r&&r.transfers!=null&&mode==="transit")info.push(["轉乘",r.transfers?`${r.transfers} 次`:"不用轉乘"]);
   if(r&&r.fare!=null&&!r.none)info.push(["票價",r.fare?`約 ${pounds(r.fare)}${r.peak&&r.off?`（尖峰 ${pounds(r.peak)}／離峰 ${pounds(r.off)}）`:""}`:"免費"]);
   if(L.manualMin!=null&&L.manualMin!=="")info.push(["時間","手動設定"]);
-  return `<div class="leg ${open?"open":""} ${late?"late":""}">
-    <div class="lhd" data-toggle="${key}"><span class="lic">${ic}</span><span>${label}・${est}</span>${late?`<span class="lt">⏰ 時間不夠</span>`:""}<span class="ar">▾</span></div>
+  return `<div class="leg m-${mode} ${open?"open":""} ${late?"late":""}">
+    <div class="lhd" data-toggle="${key}"><span class="ldot">${ic}</span>${min!=null?`<span class="lmin">${min} 分</span><span class="llb">${label}</span>`:`<span class="llb">${label}・${est}</span>`}${late?`<span class="lt">⏰ 時間不夠</span>`:""}<span class="ar">▾</span></div>
     <div class="lbd">
       <div class="modes">${Object.entries(MODES).map(([m,[i,l]])=>`<button class="${m===mode?"on":""}" data-legmode="${key}|${m}">${i} ${l}</button>`).join("")}</div>
       ${info.length?`<dl class="dl">${info.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`:""}
@@ -771,7 +790,7 @@ function viewPlan(){
       <h2>${p.m}/${p.d}（${p.w}）</h2>
       <div class="area">${esc(S.days[day]||"")}<button class="x" data-act="editDay" aria-label="改區域名">✎</button></div>
       ${wxHtml(day)}</div>
-    ${groups.map((g,k)=>g.length?`<div class="per p${k}">${PERIODS[k]}</div><div class="rows">${g.map(i=>(pre[i.id]||"")+rowHtml(i)).join("")}</div>`:"").join("")||`<p class="muted">這天還沒有行程。</p>`}
+    ${groups.map((g,k)=>g.length?`<div class="per p${k}">${PERIODS[k]}</div><div class="rows plan">${g.map(i=>(pre[i.id]||"")+rowHtml(i)).join("")}</div>`:"").join("")||`<p class="muted">這天還沒有行程。</p>`}
     <p class="hint">按住 ≡ 可以拖曳排序；🔒 是固定時間的行程。拖曳後其他行程的時間會自動重算。</p>
     <button class="add" data-add="itinerary" style="margin-top:8px">＋ 新增行程</button></main>`;
 }
