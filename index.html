@@ -143,6 +143,22 @@ input.f:focus,select.f:focus,textarea.f:focus{background:#fffbe0}
 .due{display:inline-block;margin-left:6px;font-size:11px;font-weight:800;border:1.5px solid var(--ink);border-radius:99px;padding:0 7px;background:#fff;vertical-align:1px;white-space:nowrap}
 .due.soon{background:var(--orange)} .due.over{background:var(--red);color:#fff}
 .sub{font-weight:800;font-size:14px;margin:12px 0 6px}
+details.imp>summary{list-style:none;cursor:pointer}
+details.imp>summary::-webkit-details-marker,details.sub2>summary::-webkit-details-marker{display:none}
+details.imp>summary::after{content:"▶";font-size:12px;margin-left:auto;transition:transform .15s}
+details.imp[open]>summary::after{transform:rotate(90deg)}
+details.sub2{background:var(--paper2);border:2px solid var(--ink);border-radius:10px;box-shadow:var(--shadow);margin:0 0 12px;padding:0 12px}
+details.sub2>summary{list-style:none;cursor:pointer;font-weight:800;padding:11px 0;display:flex;align-items:center}
+details.sub2>summary::after{content:"▶";font-size:11px;margin-left:auto;color:var(--muted);transition:transform .15s}
+details.sub2[open]>summary::after{transform:rotate(90deg)}
+details.sub2[open]{padding-bottom:12px}
+.fg{font-weight:800;font-size:14px;margin:10px 0 6px}
+.bl{margin:0 0 6px;padding-left:20px;font-size:14px} .bl li{margin:3px 0}
+.tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1.5px solid var(--ink);border-radius:8px;background:#fff}
+.ftbl{border-collapse:collapse;font-size:12.5px;width:100%}
+.ftbl th{background:#efe6d2;text-align:left;font-weight:800;padding:7px 6px;border-bottom:1.5px solid var(--ink);white-space:nowrap}
+.ftbl td{padding:7px 6px;border-top:1px solid var(--line);vertical-align:top}
+.ftbl td:first-child,.ftbl td:nth-child(2),.ftbl td:last-child{white-space:nowrap}
 .x{background:none;border:0;color:var(--muted);font-size:18px;padding:0 4px}
 main>.sec:nth-of-type(5n+1){--sc:var(--pink)} main>.sec:nth-of-type(5n+2){--sc:var(--yellow)} main>.sec:nth-of-type(5n+3){--sc:var(--green)}
 main>.sec:nth-of-type(5n+4){--sc:var(--orange)} main>.sec:nth-of-type(5n+5){--sc:var(--blue)}
@@ -920,6 +936,38 @@ function checkRow(c){
   return `<label class="check ${c.done?"done":""}"><input type="checkbox" data-chk="${c.id}" ${c.done?"checked":""}>
     <span>${esc(c.text)}${c.done?"":dueTag(c.due)}</span><button class="x" data-edit="checklist" data-id="${c.id}" aria-label="編輯">✎</button></label>`;
 }
+/* 重要資訊（公開資料：長榮行李規定、橙同意公開的航班表） */
+const FLIGHT_GROUPS=[
+  ["台北 to 倫敦（2/21 週日）",[
+    ["TPE > BKK","BR 67","桃園 T2<br>2/21 08:05","曼谷<br>2/21 11:10","4h 05m"],
+    ["BKK > LHR","BR 67","曼谷<br>2/21 12:40","希斯洛 T2<br>2/21 19:05","13h 25m"]],"曼谷經停 1 小時 30 分"],
+  ["倫敦 to 台北（2/26 週五）",[
+    ["LHR > BKK","BR 68","希斯洛 T2<br>2/26 21:20","曼谷<br>2/27 16:00","11h 40m"],
+    ["BKK > TPE","BR 68","曼谷<br>2/27 17:15","桃園 T2<br>2/27 21:50","3h 35m"]],"曼谷經停 1 小時 15 分"]
+];
+const BAGGAGE=[
+  ["🧳 手提行李（經濟艙）",["登機箱 1 件，最重 7 公斤","每邊不超過 56 × 36 × 23 公分，或三邊加起來不超過 115 公分（含輪子、把手、側袋）",
+    "另可帶 1 件個人物品：不超過 40 × 30 × 10 公分，或三邊加起來不超過 80 公分","個人物品可以是：筆電、包包、小背包、公事包、相機包、雨具、少量免稅品"]],
+  ["🛄 託運行李（長程航線・你的 Basic 票）",["2 件，每件最重 23 公斤","每件三邊加起來不超過 158 公分（含輪子、把手）","單件超過 32 公斤一定要分裝"]],
+  ["🔋 行動電源與電池",["不能託運，只能隨身；放在前方座位下，不放上方置物櫃","每人最多 2 個行動電源（2026/3/31 起）",
+    "上飛機後全程不能用行動電源，也不能幫它充電；座位有插座和 USB 可以充手機","100Wh 以下免申請；100–160Wh 要航空公司同意（最多 2 個）；超過 160Wh 禁止",
+    "沒有標示規格的行動電源一律禁止","藍牙耳機的充電盒也算，要隨身"]],
+  ["💧 液體",["每瓶不超過 100ml，全部裝進 1 個透明夾鏈袋（總量 1 公升以內），安檢時拿出來",
+    "曼谷經停要再過一次安檢：桃園、希斯洛買的液體免稅品可能被沒收，要買就等曼谷安檢後"]]
+];
+const openDetails=new Set();
+document.addEventListener("toggle",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k)e.target.open?openDetails.add(k):openDetails.delete(k)},true);
+const od=k=>`data-k="${k}" ${openDetails.has(k)?"open":""}`;
+function importantHtml(){
+  const flights=FLIGHT_GROUPS.map(([t,rows,stop])=>`<div class="fg">${t}</div>
+    <div class="tblwrap"><table class="ftbl"><thead><tr><th>機票</th><th>航班</th><th>起飛</th><th>抵達</th><th>飛行時間</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div><p class="hint">${stop}：要帶隨身行李下機、再過一次安檢；託運行李直掛不用領。</p>`).join("");
+  const bag=BAGGAGE.map(([t,lines])=>`<div class="fg">${t}</div><ul class="bl">${lines.map(l=>`<li>${l}</li>`).join("")}</ul>`).join("");
+  return `<details class="imp" ${od("imp")}><summary class="sec" style="--sc:var(--orange)">重要資訊</summary>
+    <details class="sub2" ${od("bag")}><summary>行李尺寸＆規定</summary>${bag}<p class="hint">資料來源：長榮航空官網，2026/10/17 查。出發前再確認一次。</p></details>
+    <details class="sub2" ${od("flt")}><summary>班機資訊</summary>${flights}<p class="hint">時間都是當地時間。</p></details>
+  </details>`;
+}
 function viewList(){
   const todo=S.checklist.filter(c=>c.group===TODO_GROUP).sort((a,b)=>(a.done-b.done)||(a.due||"9999").localeCompare(b.due||"9999"));
   const tDone=todo.filter(c=>c.done).length;
@@ -934,6 +982,7 @@ function viewList(){
       return `<div class="sub">${esc(g)} <span class="muted">${items.filter(c=>c.done).length}/${items.length}</span></div>
       <div class="card" style="padding:4px 14px">${items.map(checkRow).join("")}</div>`}).join("");
   return `<main>
+    ${importantHtml()}
     <div class="sec" style="--sc:var(--pink)">出發前待辦 <span class="muted">${tDone}/${todo.length}</span></div>
     ${pct(todo.length?tDone/todo.length*100:0)}
     <div class="cats" style="margin:10px 0 2px"><button data-act="todoView" data-v="cat" class="${byDate?"":"on"}">依分類</button><button data-act="todoView" data-v="date" class="${byDate?"on":""}">依截止日</button></div>
