@@ -546,6 +546,11 @@ function normalize(d){
     d.geo={};for(const L of Object.values(d.legs||{}))delete L.r;
     d.meta.geoV12=true;needSave=true;
   }
+  if(!d.meta.placeLinkV13){
+    for(const i of d.itinerary){if(i.placeId||!i.place)continue;
+      const p=d.places.find(p=>p.query===i.place||p.name===i.place);if(p)i.placeId=p.id}
+    d.meta.placeLinkV13=true;needSave=true;
+  }
   if(!d.meta.moneyV10){
     for(const e of d.expenses)if(e.item==null){e.item=e.note||"";e.note=""}
     d.meta.moneyV10=true;needSave=true;
@@ -717,7 +722,11 @@ const fromMin=m=>{m=Math.min(Math.max(Math.round(m),0),29*60+59);return String(M
 const endTime=i=>{const m=toMin(i.time),st=+i.stay||0;return m!=null&&st>0?fromMin(m+st):""};
 const showTime=t=>{const m=toMin(t);return m!=null&&m>=1440?`${fromMin(m-1440)}<small class="nd">+1</small>`:esc(t||"—")};
 const ceil5=m=>Math.ceil(m/5)*5;
-const locOf=i=>i&&(i.place||i.address)||"";
+const linkedPlace=i=>i&&i.placeId&&S&&S.places.find(p=>p.id===i.placeId)||null;
+const PLACE_KIND={吃:"food",逛:"sight",劇院:"show",住:"rest",交通:"move"};
+// 行程顯示用的資料：連結了地點就用地點頁的
+const eff=(i,k)=>{const lp=linkedPlace(i);return lp&&lp[k]?lp[k]:i[k]||""};
+const locOf=i=>{if(!i)return "";const lp=linkedPlace(i);return lp?(lp.query||lp.address||lp.name):(i.place||i.address||"")};
 const isLocked=i=>i.lock==="1";
 const byTime=(a,b)=>(a.time||"").localeCompare(b.time||"")||((a.ord??0)-(b.ord??0));
 const itemsOfDay=d=>S.itinerary.filter(i=>i.day===d).sort(byTime);
@@ -768,6 +777,9 @@ function placeMatch(i){
   return S.places.find(p=>p.name===q)||S.places.find(p=>q.length>=2&&p.name.includes(q))||S.places.find(p=>{const t=tok(p.name);return t&&q.includes(t)})||null;
 }
 function geoCandidates(i){
+  const lp=linkedPlace(i);
+  if(lp){const c=[];if(lp.address)c.push({q:lp.address,src:"地點頁「"+lp.name+"」的地址"});if(lp.query){if(lp.query.includes(","))c.push({q:lp.query.slice(lp.query.indexOf(",")+1).trim(),src:"地點頁「"+lp.name+"」"});c.push({q:lp.query,src:"地點頁「"+lp.name+"」"})}
+    const en=(lp.name.match(/[A-Za-z][A-Za-z0-9&'’. -]{2,}/g)||[]).join(" ").trim();if(en)c.push({q:en,src:"地點頁「"+lp.name+"」的名稱"});return c}
   const q=locOf(i),pm=placeMatch(i),c=[];
   if(i.address)c.push({q:i.address,src:"地址"});
   if(pm&&pm.query)c.push({q:pm.query,src:"地點頁「"+pm.name+"」"});
@@ -775,9 +787,9 @@ function geoCandidates(i){
     const en=(p.match(/[A-Za-z][A-Za-z0-9&'’. -]{2,}/g)||[]).join(" ").trim();if(en&&en!==p)c.push({q:en,src:"地圖搜尋字的英文部分"})}
   const seen=new Set();return c.filter(x=>!seen.has(x.q)&&seen.add(x.q));
 }
-const geoKey=i=>(i.address||"")+"|"+(i.place||"");
+const geoKey=i=>{const lp=linkedPlace(i);return lp?"P|"+lp.id+"|"+(lp.address||"")+"|"+(lp.query||lp.name):(i.address||"")+"|"+(i.place||"")};
 // 給地圖和 Google Maps 用的搜尋字：優先英文
-const mapQ=i=>i.address||(placeMatch(i)||{}).query||locOf(i);
+const mapQ=i=>{const lp=linkedPlace(i);return lp?(lp.address||lp.query||lp.name):i.address||(placeMatch(i)||{}).query||locOf(i)};
 async function geocodeItem(i){
   const key=geoKey(i),g=S.geo[key];if(g&&g.v)return g.v;
   let hit=null;for(const c of geoCandidates(i)){const v=await photon(c.q);if(v){hit={v,q:c.q,src:c.src};break}}
@@ -855,9 +867,10 @@ function rowHtml(i){
   const open=openRows.has(i.id);
   const first=(i.note||"").split("\n")[0];
   const st=i.status&&STATUS[i.status]?`<span class="st ${i.status}">${STATUS[i.status]}</span>`:"";
-  const det=[["地址",i.address],["營業時間",i.hours],["價位",i.price],["停留",i.stay?`${i.stay} 分${endTime(i)?`（到 ${fromMin(toMin(endTime(i))%1440)}）`:""}`:""]].filter(([,v])=>v);
-  const web=safeUrl(i.web);
-  const q=i.place||i.address?mapQ(i):"";
+  const lp=linkedPlace(i);
+  const det=[["地址",eff(i,"address")],["營業時間",eff(i,"hours")],["價位",eff(i,"price")],["停留",i.stay?`${i.stay} 分${endTime(i)?`（到 ${fromMin(toMin(endTime(i))%1440)}）`:""}`:""]].filter(([,v])=>v);
+  const web=safeUrl(eff(i,"web"));
+  const q=locOf(i)?mapQ(i):"";
   const map=q?(navigator.onLine?(`<iframe class="map" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=15&output=embed"></iframe>`):`<div class="mapoff">離線中：地圖要有網路才看得到</div>`):"";
   return `<div class="row ${i.kind} ${open?"open":""}" data-id="${i.id}">
     <div class="hd" data-toggle="${i.id}">
@@ -870,7 +883,7 @@ function rowHtml(i){
       ${i.note?`<div class="no">${esc(i.note)}</div>`:""}
       ${det.length?`<dl class="dl">${det.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`:""}
       ${map}
-      <div class="acts">${q?`<a class="chip grn" href="${mapUrl(q)}" target="_blank" rel="noopener">📍 Google Maps 開啟</a>`:""}${web?`<a class="chip" href="${esc(web)}" target="_blank" rel="noopener">官網</a>`:""}<button class="chip" data-edit="itinerary" data-id="${i.id}">✎ 編輯</button></div>
+      <div class="acts">${q?`<a class="chip grn" href="${mapUrl(q)}" target="_blank" rel="noopener">📍 Google Maps 開啟</a>`:""}${web?`<a class="chip" href="${esc(web)}" target="_blank" rel="noopener">官網</a>`:""}${lp?`<button class="chip" data-goplace="${lp.id}">📍 查看地點</button>`:""}<button class="chip" data-edit="itinerary" data-id="${i.id}">✎ 編輯</button></div>
     </div></div>`;
 }
 function viewPlan(){
@@ -1061,25 +1074,46 @@ function viewShows(){
 }
 
 /* ---------- 地點 ---------- */
+const schedOf=p=>[...new Set(S.itinerary.filter(i=>i.placeId===p.id).map(i=>i.day))].sort();
 function placeRow(p){
   const open=openRows.has(p.id), q=p.query||p.address||p.name, web=safeUrl(p.web);
+  const sd=schedOf(p),stag=sd.length?`<span class="st booked">已排 ${sd.map(d=>{const x=dParts(d);return x.m+"/"+x.d}).join("、")}</span>`:`<span class="st none">還沒排</span>`;
   const first=(p.note||p.desc||"").split("\n")[0];
   const det=[["地址",p.address],["營業時間",p.hours],["消費",p.price]].filter(([,v])=>v);
   const map=navigator.onLine?`<iframe class="map" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=15&output=embed"></iframe>`:`<div class="mapoff">離線中：地圖要有網路才看得到</div>`;
-  return `<div class="row pl ${open?"open":""}">
-    <div class="hd" data-toggle="${p.id}"><div><div class="tt">${esc(p.name)}</div>${first?`<div class="sm">${esc(first)}</div>`:""}</div><div class="ar">▶</div></div>
+  return `<div class="row pl ${open?"open":""}" data-pid="${p.id}">
+    <div class="hd" data-toggle="${p.id}"><div><div class="tt">${esc(p.name)}${stag}</div>${first?`<div class="sm">${esc(first)}</div>`:""}</div><div class="ar">▶</div></div>
     <div class="bd">
       ${p.desc?`<div class="no">${esc(p.desc)}</div>`:""}
       ${det.length?`<dl class="dl">${det.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`:""}
       ${p.note?`<div class="no muted">📝 ${esc(p.note)}</div>`:""}
       ${!p.desc&&!det.length&&!p.note?`<div class="muted" style="margin-bottom:8px">還沒有簡介，點「編輯」自己填。</div>`:""}
       ${map}
-      <div class="acts"><a class="chip grn" href="${mapUrl(q)}" target="_blank" rel="noopener">📍 Google Maps 開啟</a>${web?`<a class="chip" href="${esc(web)}" target="_blank" rel="noopener">官網</a>`:""}<button class="chip" data-edit="places" data-id="${p.id}">✎ 編輯</button></div>
+      <div class="acts"><a class="chip grn" href="${mapUrl(q)}" target="_blank" rel="noopener">📍 Google Maps 開啟</a>${web?`<a class="chip" href="${esc(web)}" target="_blank" rel="noopener">官網</a>`:""}<button class="chip" data-schedule="${p.id}">＋ 排進行程</button><button class="chip" data-edit="places" data-id="${p.id}">✎ 編輯</button></div>
     </div></div>`;
 }
+let placeFilter=lsGet("lf27-placefilter")||"";
+function openScheduleForm(pid){
+  const p=S.places.find(x=>x.id===pid);if(!p)return;
+  const kind=PLACE_KIND[p.cat]||"sight";
+  const sugg=d=>{const l=itemsOfDay(d).filter(i=>toMin(i.time)!=null&&!NO_LEG.has(i.kind)&&i.autoAnchor!=="end").pop();if(!l)return "10:00";const e=toMin(l.time)+(+l.stay||0)+30;return fromMin(Math.min(Math.ceil(e/5)*5,23*60+55))};
+  openSheet(`<h3>排進行程：${esc(p.name)}</h3><form id="schf">
+    <label>日期</label><select class="f" name="day">${DAYS.map(d=>{const x=dParts(d);return `<option value="${d}" ${d===day?"selected":""}>${x.m}/${x.d}（${x.w}）</option>`}).join("")}</select>
+    <div class="row2"><div><label>時間</label><input class="f" name="time" type="time" value="${sugg(day)}"></div><div><label>停留（分）</label><input class="f" name="stay" inputmode="numeric" value="${STAY_DEFAULT[kind]||60}"></div></div>
+    <p class="hint">預設排在當天最後一項結束後 30 分鐘，加完也可以拖曳調整。</p>
+    <div class="foot"><button type="button" class="btn ghost" data-act="close">取消</button><button class="btn solid" style="flex:1">加進行程</button></div></form>`);
+  const f=$("#schf");f.day.onchange=()=>{f.time.value=sugg(f.day.value)};
+  f.onsubmit=e=>{e.preventDefault();
+    const it={id:uid(),day:f.day.value,time:f.time.value,kind,title:p.name,note:"",place:"",address:"",tz:"",status:"",hours:"",price:"",web:"",
+      stay:parseInt(f.stay.value)||STAY_DEFAULT[kind]||60,lock:kind==="show"?"1":"",placeId:p.id};
+    S.itinerary.push(it);save();closeSheet();render();const x=dParts(it.day);toast(`已排進 ${x.m}/${x.d} ${it.time}`);};
+}
 function viewPlaces(){
-  const groups=[...new Set(S.places.map(p=>p.cat||"其他"))];
-  return `<main>${groups.map(g=>`<div class="sec">${esc(g)}</div><div class="rows">${S.places.filter(p=>(p.cat||"其他")===g).map(placeRow).join("")}</div>`).join("")}
+  const ok=p=>placeFilter==="todo"?!schedOf(p).length:placeFilter==="done"?schedOf(p).length>0:true;
+  const list=S.places.filter(ok),groups=[...new Set(list.map(p=>p.cat||"其他"))];
+  const n=f=>S.places.filter(p=>f==="todo"?!schedOf(p).length:f==="done"?schedOf(p).length>0:true).length;
+  return `<main><div class="cats" style="margin:8px 0 4px">${[["","全部"],["todo","還沒排"],["done","已排"]].map(([v,l])=>`<button data-pfilter="${v}" class="${placeFilter===v?"on":""}">${l} ${n(v)}</button>`).join("")}</div>
+    ${groups.map(g=>`<div class="sec">${esc(g)}</div><div class="rows">${list.filter(p=>(p.cat||"其他")===g).map(placeRow).join("")}</div>`).join("")||`<p class="muted">沒有符合的地點。</p>`}
     <button class="add" data-add="places" style="margin-top:16px">＋ 新增地點</button>
     <p class="hint">內嵌地圖要有網路；離線時請先在 Google Maps 下載倫敦離線地圖。簡介是 2026/10 查的，出發前再確認。</p></main>`;
 }
@@ -1175,13 +1209,15 @@ function openForm(coll,id,group){
   const vals=Object.assign({},obj);
   if(coll==="itinerary"&&toMin(obj.time)>=1440)vals.time=fromMin(toMin(obj.time)-1440);
   if(coll==="checklist") vals.where=obj.group===TODO_GROUP?TODO_GROUP+"|"+(obj.cat||"其他"):obj.group;
+  let fields=F.fields;
+  if(coll==="itinerary")fields=[["placeId","從地點選（選了會連結：地址、營業時間等以地點頁為準）","select",[["","—（不連結）"],...S.places.map(p=>[p.id,`${p.cat||"其他"}｜${p.name}`])]],...F.fields];
   const field=([k,l,t,opts])=>{const v=vals[k]??"";
     // 舊資料的值不在選項裡時保留它，避免一打開編輯就被改成第一個選項
     if(t==="select"&&v!==""&&!opts.some(([ov])=>ov==v)) opts=[...opts,[v,v]];
     if(t==="select") return `<label>${l}</label><select class="f" name="${k}">${opts.map(([ov,ol])=>`<option value="${esc(ov)}" ${ov==v?"selected":""}>${esc(ol)}</option>`).join("")}</select>`;
     if(t==="textarea") return `<label>${l}</label><textarea class="f" name="${k}" rows="3">${esc(v)}</textarea>`;
     return `<label>${l}</label><input class="f" name="${k}" type="${t==="number"?"text":t}" ${t==="number"?'inputmode="decimal"':""} value="${esc(v)}">`;};
-  openSheet(`<h3>${isNew?"新增":"編輯"}${F.title}</h3><form id="frm">${F.fields.map(field).join("")}
+  openSheet(`<h3>${isNew?"新增":"編輯"}${F.title}</h3><form id="frm">${fields.map(field).join("")}
     <div class="foot">${isNew?"":`<button type="button" class="btn danger" data-del="${coll}" data-id="${id}">刪除</button>`}
     <button type="button" class="btn ghost" data-act="close">取消</button><button type="submit" class="btn solid" style="flex:1">儲存</button></div></form>`);
   const before={stay:obj.stay,lock:obj.lock,loc:geoKey(obj),day:obj.day,time:obj.time};
@@ -1189,9 +1225,19 @@ function openForm(coll,id,group){
     const f=$("#frm"),hint=document.createElement("p");hint.className="hint";f.stay.after(hint);
     const upd=()=>{const t=toMin(f.time.value),m=parseFloat(f.stay.value)||0;hint.textContent=t!=null&&m>0?`預計結束：${fromMin((t+m)%1440)}${t+m>=1440?"（隔天）":""}`:"填了開始時間和停留時間，就會算出預計結束時間"};
     f.time.addEventListener("input",upd);f.stay.addEventListener("input",upd);upd();
+    // 選了地點：帶入名稱和類型（標題沒改過才帶）
+    f.placeId.onchange=()=>{const p=S.places.find(x=>x.id===f.placeId.value);if(!p)return;
+      if(isNew||!f.title.value.trim())f.title.value=p.name;if(isNew){f.kind.value=PLACE_KIND[p.cat]||f.kind.value;f.stay.value=STAY_DEFAULT[f.kind.value]||60;upd()}};
   }
+  if(coll==="places")before.pq=(obj.query||"")+"|"+(obj.address||"");
   $("#frm").onsubmit=e=>{e.preventDefault();const fd=new FormData(e.target);
-    F.fields.forEach(([k,,t])=>{let v=fd.get(k)??"";if(t==="number")v=parseFloat(String(v).replace(/,/g,""))||0;obj[k]=v});
+    fields.forEach(([k,,t])=>{let v=fd.get(k)??"";if(t==="number")v=parseFloat(String(v).replace(/,/g,""))||0;obj[k]=v});
+    if(coll==="itinerary"&&!obj.placeId)delete obj.placeId;
+    // 地點的位置改了：連結它的行程，交通要重算
+    if(coll==="places"&&!isNew&&(obj.query||"")+"|"+(obj.address||"")!==before.pq){
+      const ids=new Set(S.itinerary.filter(i=>i.placeId===obj.id).map(i=>i.id));
+      for(const [k,L] of Object.entries(S.legs))if(k.split(">").some(x=>ids.has(x)))delete L.r;
+    }
     if(coll==="itinerary"&&toMin(before.time)>=1440&&obj.time&&obj.time<"06:00")obj.time=fromMin(toMin(obj.time)+1440);
     if(coll==="checklist"){const [g,c]=obj.where.split("|");obj.group=g;obj.cat=c||"";delete obj.where}
     if(isNew){obj.id=uid();if(coll==="checklist")obj.done=false;S[coll].push(obj)}
@@ -1271,7 +1317,7 @@ document.addEventListener("click",async e=>{
     if(v.legshow){L.hidden=false}
     adjustAnchors(day);save();render();if(v.legshow)ensureLegs(day);return;
   }
-  const t=e.target.closest("[data-tab],[data-day],[data-add],[data-edit],[data-del],[data-act],[data-cat],[data-delexp],[data-editexp],[data-toggle],[data-cur],[data-budget],[data-catren],[data-catdel],[data-expf]");
+  const t=e.target.closest("[data-tab],[data-day],[data-add],[data-edit],[data-del],[data-act],[data-cat],[data-delexp],[data-editexp],[data-toggle],[data-cur],[data-budget],[data-catren],[data-catdel],[data-expf],[data-goplace],[data-schedule],[data-pfilter]");
   if(!t||!S&&!["syncNow"].includes(t.dataset.act)) return;
   const d=t.dataset;
   if(d.tab){tab=d.tab;lsSet("lf27-tab",tab);render();scrollTo(0,0);return}
@@ -1279,7 +1325,13 @@ document.addEventListener("click",async e=>{
   if(d.toggle){const o=!openRows.has(d.toggle);o?openRows.add(d.toggle):openRows.delete(d.toggle);t.parentElement.classList.toggle("open",o);return}
   if(d.add){openForm(d.add,null,d.group);return}
   if(d.edit){e.preventDefault();openForm(d.edit,d.id);return}
-  if(d.del){if(confirm("確定刪除？")){S[d.del]=S[d.del].filter(x=>x.id!==d.id);save();closeSheet();render();toast("已刪除")}return}
+  if(d.del){if(confirm(d.del==="places"&&S.itinerary.some(i=>i.placeId===d.id)?"這個地點已排進行程。刪除後，行程會保留目前的地址等資料，但不再連動。確定刪除？":"確定刪除？")){
+    if(d.del==="places"){const p=S.places.find(x=>x.id===d.id);for(const i of S.itinerary)if(i.placeId===d.id){
+      for(const k of ["address","hours","price","web"])if(!i[k]&&p[k])i[k]=p[k];if(!i.place)i.place=p.query||p.name;delete i.placeId}}
+    S[d.del]=S[d.del].filter(x=>x.id!==d.id);save();closeSheet();render();toast("已刪除")}return}
+  if(d.goplace){tab="places";lsSet("lf27-tab",tab);placeFilter="";openRows.add(d.goplace);render();const el=document.querySelector(`[data-pid="${d.goplace}"]`);el&&el.scrollIntoView({block:"center"});return}
+  if(d.schedule){openScheduleForm(d.schedule);return}
+  if(d.pfilter!==undefined){placeFilter=d.pfilter;lsSet("lf27-placefilter",placeFilter);render();return}
   if(d.cat){expCat=d.cat;document.querySelectorAll("#cats button").forEach(b=>b.classList.toggle("on",b.dataset.cat===expCat));return}
   if(d.delexp){if(confirm("刪除這筆記帳？")){S.expenses=S.expenses.filter(x=>x.id!==d.delexp);save();closeSheet();render()}return}
   if(d.editexp){openExpForm(d.editexp);return}
