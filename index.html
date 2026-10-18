@@ -243,6 +243,8 @@ nav.tabs button:nth-child(4){--tc:var(--blue)} nav.tabs button:nth-child(5){--tc
 .drag{font-size:20px;line-height:1;color:var(--muted);text-align:center;touch-action:none;cursor:grab;padding:2px 0;user-select:none;-webkit-user-select:none}
 .lock-ic{font-size:13px;text-align:center;opacity:.75}
 .tm .nd{font-size:10px;margin-left:2px;color:var(--red)}
+.te{font-size:12px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums;line-height:1.2}
+.te .nd{font-size:9px;color:var(--red)}
 /* 行程頁：每個行程是獨立紙片；交通是紙片之間的彩色點線（路線圖風），不是紙片 */
 .rows.plan{background:transparent;border:0;box-shadow:none;overflow:visible}
 .rows.plan .row{background:var(--paper2);border:2px solid var(--ink);border-radius:10px;box-shadow:var(--shadow)}
@@ -707,6 +709,8 @@ const STEP_ICON={walking:"🚶",tube:"🚇",bus:"🚌",dlr:"🚈","elizabeth-lin
 const toMin=t=>/^\d\d:\d\d$/.test(t||"")?(+t.slice(0,2))*60+(+t.slice(3)):null;
 const fromMin=m=>{m=Math.min(Math.max(Math.round(m),0),29*60+59);return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0")};
 // 畫面顯示：24:50 → 00:50＋1
+// 預計結束時間＝開始＋停留；沒時間或沒停留就不顯示
+const endTime=i=>{const m=toMin(i.time),st=+i.stay||0;return m!=null&&st>0?fromMin(m+st):""};
 const showTime=t=>{const m=toMin(t);return m!=null&&m>=1440?`${fromMin(m-1440)}<small class="nd">+1</small>`:esc(t||"—")};
 const ceil5=m=>Math.ceil(m/5)*5;
 const locOf=i=>i&&(i.place||i.address)||"";
@@ -844,13 +848,13 @@ function rowHtml(i){
   const open=openRows.has(i.id);
   const first=(i.note||"").split("\n")[0];
   const st=i.status&&STATUS[i.status]?`<span class="st ${i.status}">${STATUS[i.status]}</span>`:"";
-  const det=[["地址",i.address],["營業時間",i.hours],["價位",i.price],["停留",i.stay?`${i.stay} 分`:""]].filter(([,v])=>v);
+  const det=[["地址",i.address],["營業時間",i.hours],["價位",i.price],["停留",i.stay?`${i.stay} 分${endTime(i)?`（到 ${fromMin(toMin(endTime(i))%1440)}）`:""}`:""]].filter(([,v])=>v);
   const web=safeUrl(i.web);
   const q=i.place||i.address?mapQ(i):"";
   const map=q?(navigator.onLine?(`<iframe class="map" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=15&output=embed"></iframe>`):`<div class="mapoff">離線中：地圖要有網路才看得到</div>`):"";
   return `<div class="row ${i.kind} ${open?"open":""}" data-id="${i.id}">
     <div class="hd" data-toggle="${i.id}">
-      <div><div class="tm">${showTime(i.time)}</div><div class="kd"><i></i>${KINDS[i.kind]||""}</div>${i.tz?`<span class="tz">${esc(i.tz)}時間</span>`:""}</div>
+      <div><div class="tm">${showTime(i.time)}</div>${endTime(i)?`<div class="te">～${showTime(endTime(i))}</div>`:""}<div class="kd"><i></i>${KINDS[i.kind]||""}</div>${i.tz?`<span class="tz">${esc(i.tz)}時間</span>`:""}</div>
       <div><div class="tt">${esc(i.title)}${st}</div>${first?`<div class="sm">${esc(first)}</div>`:""}</div>
       ${isLocked(i)?`<div class="lock-ic" title="時間固定">🔒</div>`:`<div class="drag" aria-label="拖曳排序">≡</div>`}
       <div class="ar">▶</div>
@@ -1174,6 +1178,11 @@ function openForm(coll,id,group){
     <div class="foot">${isNew?"":`<button type="button" class="btn danger" data-del="${coll}" data-id="${id}">刪除</button>`}
     <button type="button" class="btn ghost" data-act="close">取消</button><button type="submit" class="btn solid" style="flex:1">儲存</button></div></form>`);
   const before={stay:obj.stay,lock:obj.lock,loc:locOf(obj),day:obj.day,time:obj.time};
+  if(coll==="itinerary"){
+    const f=$("#frm"),hint=document.createElement("p");hint.className="hint";f.stay.after(hint);
+    const upd=()=>{const t=toMin(f.time.value),m=parseFloat(f.stay.value)||0;hint.textContent=t!=null&&m>0?`預計結束：${fromMin((t+m)%1440)}${t+m>=1440?"（隔天）":""}`:"填了開始時間和停留時間，就會算出預計結束時間"};
+    f.time.addEventListener("input",upd);f.stay.addEventListener("input",upd);upd();
+  }
   $("#frm").onsubmit=e=>{e.preventDefault();const fd=new FormData(e.target);
     F.fields.forEach(([k,,t])=>{let v=fd.get(k)??"";if(t==="number")v=parseFloat(String(v).replace(/,/g,""))||0;obj[k]=v});
     if(coll==="itinerary"&&toMin(before.time)>=1440&&obj.time&&obj.time<"06:00")obj.time=fromMin(toMin(obj.time)+1440);
