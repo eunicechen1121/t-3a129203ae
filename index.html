@@ -542,6 +542,10 @@ function normalize(d){
     for(const L of Object.values(d.legs||{}))if(L.r)for(const m of Object.keys(L.r))if(L.r[m]&&L.r[m].none)delete L.r[m];
     d.meta.geoV11=true;needSave=true;
   }
+  if(!d.meta.geoV12){
+    d.geo={};for(const L of Object.values(d.legs||{}))delete L.r;
+    d.meta.geoV12=true;needSave=true;
+  }
   if(!d.meta.moneyV10){
     for(const e of d.expenses)if(e.item==null){e.item=e.note||"";e.note=""}
     d.meta.moneyV10=true;needSave=true;
@@ -765,18 +769,19 @@ function placeMatch(i){
 }
 function geoCandidates(i){
   const q=locOf(i),pm=placeMatch(i),c=[];
-  if(i.address)c.push(i.address);
-  if(pm&&pm.query)c.push(pm.query);
-  if(q){c.push(q.includes(",")?q.slice(q.indexOf(",")+1).trim():q);   // 「名稱, 街道」用街道部分比較準
-    const en=(q.match(/[A-Za-z][A-Za-z0-9&'’. -]{2,}/g)||[]).join(" ").trim();if(en&&en!==q)c.push(en)}
-  return [...new Set(c)];
+  if(i.address)c.push({q:i.address,src:"地址"});
+  if(pm&&pm.query)c.push({q:pm.query,src:"地點頁「"+pm.name+"」"});
+  if(i.place){const p=i.place;c.push({q:p.includes(",")?p.slice(p.indexOf(",")+1).trim():p,src:"地圖搜尋字"});   // 「名稱, 街道」用街道部分比較準
+    const en=(p.match(/[A-Za-z][A-Za-z0-9&'’. -]{2,}/g)||[]).join(" ").trim();if(en&&en!==p)c.push({q:en,src:"地圖搜尋字的英文部分"})}
+  const seen=new Set();return c.filter(x=>!seen.has(x.q)&&seen.add(x.q));
 }
+const geoKey=i=>(i.address||"")+"|"+(i.place||"");
 // 給地圖和 Google Maps 用的搜尋字：優先英文
 const mapQ=i=>i.address||(placeMatch(i)||{}).query||locOf(i);
 async function geocodeItem(i){
-  const key=locOf(i);if(S.geo[key])return S.geo[key];
-  let v=null;for(const q of geoCandidates(i)){v=await photon(q);if(v)break}
-  S.geo[key]=v;return v;
+  const key=geoKey(i),g=S.geo[key];if(g&&g.v)return g.v;
+  let hit=null;for(const c of geoCandidates(i)){const v=await photon(c.q);if(v){hit={v,q:c.q,src:c.src};break}}
+  S.geo[key]=hit||{v:null};return hit?hit.v:null;
 }
 async function tfl(a,b,mode){
   const m={walking:"walking",transit:"tube,bus,dlr,overground,elizabeth-line,national-rail,walking",bicycling:"cycle"}[mode];
@@ -833,6 +838,8 @@ function legHtml(a,b,late){
   if(r&&r.transfers!=null&&mode==="transit")info.push(["轉乘",r.transfers?`${r.transfers} 次`:"不用轉乘"]);
   if(r&&r.fare!=null&&!r.none)info.push(["票價",r.fare?`約 ${pounds(r.fare)}${r.peak&&r.off?`（尖峰 ${pounds(r.peak)}／離峰 ${pounds(r.off)}）`:""}`:"免費"]);
   if(L.manualMin!=null&&L.manualMin!=="")info.push(["時間","手動設定"]);
+  const geoTxt=i=>{const g=S.geo[geoKey(i)];return g&&g.v?`${esc(g.q)}<span class="muted">（${esc(g.src)}）</span>`:g?`<span class="muted">找不到，請補英文地址</span>`:`<span class="muted">還沒定位</span>`};
+  info.push(["起點",geoTxt(a)]);info.push(["終點",geoTxt(b)]);
   return `<div class="leg m-${mode} ${open?"open":""} ${late?"late":""}">
     <div class="lhd" data-toggle="${key}"><span class="ldot">${ic}</span>${min!=null?`<span class="lmin">${min} 分</span><span class="llb">${label}</span>`:`<span class="llb">${label}・${est}</span>`}${late?`<span class="lt">⏰ 時間不夠</span>`:""}<span class="ar">▾</span></div>
     <div class="lbd">
@@ -1177,7 +1184,7 @@ function openForm(coll,id,group){
   openSheet(`<h3>${isNew?"新增":"編輯"}${F.title}</h3><form id="frm">${F.fields.map(field).join("")}
     <div class="foot">${isNew?"":`<button type="button" class="btn danger" data-del="${coll}" data-id="${id}">刪除</button>`}
     <button type="button" class="btn ghost" data-act="close">取消</button><button type="submit" class="btn solid" style="flex:1">儲存</button></div></form>`);
-  const before={stay:obj.stay,lock:obj.lock,loc:locOf(obj),day:obj.day,time:obj.time};
+  const before={stay:obj.stay,lock:obj.lock,loc:geoKey(obj),day:obj.day,time:obj.time};
   if(coll==="itinerary"){
     const f=$("#frm"),hint=document.createElement("p");hint.className="hint";f.stay.after(hint);
     const upd=()=>{const t=toMin(f.time.value),m=parseFloat(f.stay.value)||0;hint.textContent=t!=null&&m>0?`預計結束：${fromMin((t+m)%1440)}${t+m>=1440?"（隔天）":""}`:"填了開始時間和停留時間，就會算出預計結束時間"};
@@ -1193,7 +1200,7 @@ function openForm(coll,id,group){
       if(isNew){obj.stay=obj.stay||STAY_DEFAULT[obj.kind]||60}
       if(!isNew&&obj.autoAnchor)delete obj.autoAnchor;
       // 地點改了，跟它相關的交通要重算
-      if(locOf(obj)!==before.loc)for(const [k,L] of Object.entries(S.legs))if(k.split(">").includes(obj.id))delete L.r,delete L.mode;
+      if(geoKey(obj)!==before.loc)for(const [k,L] of Object.entries(S.legs))if(k.split(">").includes(obj.id))delete L.r,delete L.mode;
       if(!isNew&&(+obj.stay!==+before.stay||obj.lock!==before.lock))runRecalc(itemsOfDay(obj.day));
     }
     save();closeSheet();render();toast("已儲存");};
