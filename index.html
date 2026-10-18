@@ -239,6 +239,7 @@ nav.tabs button:nth-child(4){--tc:var(--blue)} nav.tabs button:nth-child(5){--tc
 .st.booked{background:#8fd08a} .st.todo{background:var(--red);color:#fff} .st.none{background:#fff;color:var(--muted);border-color:var(--muted)}
 .chip.grn{background:var(--green);color:#fff}
 .row.pl .hd{grid-template-columns:minmax(0,1fr) 18px}
+.catnote{margin:-4px 0 10px;padding:8px 12px;background:#fff8d6;border:1.5px dashed var(--ink);border-radius:10px;font-size:13px}
 .row:not(.pl) .hd{grid-template-columns:62px minmax(0,1fr) 26px 14px}
 .drag{font-size:20px;line-height:1;color:var(--muted);text-align:center;touch-action:none;cursor:grab;padding:2px 0;user-select:none;-webkit-user-select:none}
 .lock-ic{font-size:13px;text-align:center;opacity:.75}
@@ -434,6 +435,19 @@ const PLACES_V15 = [
   {name:"Ole & Steen",query:"Ole & Steen St James's Market Haymarket London",address:"56, No 2 Haymarket, St James's Market, SW1Y 4RP",
    hours:"週一–五 07:00–21:00；週六、日 08:00–21:00"}
 ];
+// 2026-10-19 超市分類＋「吃」分類註解（公開店家資訊）
+const PLACES_V16 = [
+  {name:"Whole Foods Market",cat:"超市",query:"Whole Foods Market 20 Glasshouse Street London",address:"20 Glasshouse Street, W1B 5AR",
+   desc:"就在 Piccadilly Circus 旁，離旅館最近的超市。🍱 有熱食吧和沙拉吧（秤重計價），另有果汁吧、麻糬吧，樓上有座位可以內用。偏貴，平日午餐時段人很多。",
+   hours:"週一–六 08:00–22:00；週日 12:00–18:00",price:"熱食秤重計價，偏貴"},
+  {name:"Japan Centre Flagship Store (Leicester Square)",cat:"超市",query:"Japan Centre 35A Panton Street London",address:"35A Panton Street, SW1Y 4EA",
+   desc:"日本超市加美食街。🍱 有熱食區，咖哩、麵類、飯類可以內用或外帶；冷藏區有壽司、飯糰、沙拉；晚上常有特價。從旅館走路約 5 分鐘。",
+   hours:"約週一–三 10:00–21:30；週四、日 10:00–22:00；週五–六 09:30–22:00（各來源不一）",web:"https://www.japancentre.com"},
+  {name:"Waitrose & Partners（John Lewis Oxford Street）",cat:"超市",query:"Waitrose John Lewis 300 Oxford Street London",address:"Food Hall, John Lewis, 300 Oxford Street, W1A 1EX（百貨地下樓）",
+   desc:"John Lewis 百貨裡的 Waitrose 食品館，英國中高價位的超市。🥪 有現成三明治、壽司、沙拉；Waitrose 的午餐套餐（主食＋配菜＋飲料）約 £5（2023 年價格）。有沒有熱食櫃沒查到。在 Oxford Circus 和 Bond Street 之間，離旅館比較遠。",
+   hours:"週一–三、五 09:00–20:00；週四 09:00–21:00；週六 10:00–20:00；週日 12:00–18:00"}
+];
+const CAT_NOTES_V16={吃:"💡 不知道要吃什麼的時候：Pret 連鎖店，旅館附近好幾間，三明治、可頌、湯都有。"};
 const NEW_TODOS_V4 = [
   ["採購","買 eSIM（確認英國能用、天數涵蓋 2/21–2/26）","2027-02-10"],
   ["採購","買旅平險（先查信用卡附帶的旅程取消／延誤保障）","2026-11-15"],
@@ -600,6 +614,11 @@ function normalize(d){
   if(!d.meta.placesV14){
     for(const x of PLACES_V14)if(!d.places.some(p=>p.name===x.name))d.places.push({id:uid(),note:"",price:"",web:"",...x});
     d.meta.placesV14=true;needSave=true;
+  }
+  if(!d.meta.placesV16){
+    for(const x of PLACES_V16)if(!d.places.some(p=>p.name===x.name))d.places.push({id:uid(),note:"",price:"",web:"",...x});
+    d.catNotes=d.catNotes||{};for(const [k,v] of Object.entries(CAT_NOTES_V16))if(!d.catNotes[k])d.catNotes[k]=v;
+    d.meta.placesV16=true;needSave=true;
   }
   if(!d.meta.placesV15){
     for(const x of PLACES_V15){const p=d.places.find(y=>y.name===x.name),orig=PLACES_V14.find(y=>y.name===x.name)||{};if(!p)continue;
@@ -783,7 +802,7 @@ const endTime=i=>{const m=toMin(i.time),st=+i.stay||0;return m!=null&&st>0?fromM
 const showTime=t=>{const m=toMin(t);return m!=null&&m>=1440?`${fromMin(m-1440)}<small class="nd">+1</small>`:esc(t||"—")};
 const ceil5=m=>Math.ceil(m/5)*5;
 const linkedPlace=i=>i&&i.placeId&&S&&S.places.find(p=>p.id===i.placeId)||null;
-const PLACE_KIND={吃:"food",甜點咖啡:"food",逛:"sight",劇院:"show",住:"rest",交通:"move"};
+const PLACE_KIND={吃:"food",甜點咖啡:"food",超市:"food",逛:"sight",劇院:"show",住:"rest",交通:"move"};
 // 行程顯示用的資料：連結了地點就用地點頁的
 const eff=(i,k)=>{const lp=linkedPlace(i);return lp&&lp[k]?lp[k]:i[k]||""};
 const locOf=i=>{if(!i)return "";const lp=linkedPlace(i);return lp?(lp.query||lp.address||lp.name):(i.place||i.address||"")};
@@ -1173,7 +1192,7 @@ function viewPlaces(){
   const list=S.places.filter(ok),groups=[...new Set(list.map(p=>p.cat||"其他"))];
   const n=f=>S.places.filter(p=>f==="todo"?!schedOf(p).length:f==="done"?schedOf(p).length>0:true).length;
   return `<main><div class="cats" style="margin:8px 0 4px">${[["","全部"],["todo","還沒排"],["done","已排"]].map(([v,l])=>`<button data-pfilter="${v}" class="${placeFilter===v?"on":""}">${l} ${n(v)}</button>`).join("")}</div>
-    ${groups.map(g=>`<div class="sec">${esc(g)}</div><div class="rows">${list.filter(p=>(p.cat||"其他")===g).map(placeRow).join("")}</div>`).join("")||`<p class="muted">沒有符合的地點。</p>`}
+    ${groups.map(g=>`<div class="sec">${esc(g)}<button class="x" data-catnote="${esc(g)}" aria-label="分類註解" style="margin-left:auto;font-size:14px">✎</button></div>${(S.catNotes||{})[g]?`<p class="catnote">${esc(S.catNotes[g])}</p>`:""}<div class="rows">${list.filter(p=>(p.cat||"其他")===g).map(placeRow).join("")}</div>`).join("")||`<p class="muted">沒有符合的地點。</p>`}
     <button class="add" data-add="places" style="margin-top:16px">＋ 新增地點</button>
     <p class="hint">內嵌地圖要有網路；離線時請先在 Google Maps 下載倫敦離線地圖。簡介是 2026/10 查的，出發前再確認。</p></main>`;
 }
@@ -1377,7 +1396,7 @@ document.addEventListener("click",async e=>{
     if(v.legshow){L.hidden=false}
     adjustAnchors(day);save();render();if(v.legshow)ensureLegs(day);return;
   }
-  const t=e.target.closest("[data-tab],[data-day],[data-add],[data-edit],[data-del],[data-act],[data-cat],[data-delexp],[data-editexp],[data-toggle],[data-cur],[data-budget],[data-catren],[data-catdel],[data-expf],[data-goplace],[data-schedule],[data-pfilter]");
+  const t=e.target.closest("[data-tab],[data-day],[data-add],[data-edit],[data-del],[data-act],[data-cat],[data-delexp],[data-editexp],[data-toggle],[data-cur],[data-budget],[data-catren],[data-catdel],[data-expf],[data-goplace],[data-schedule],[data-pfilter],[data-catnote]");
   if(!t||!S&&!["syncNow"].includes(t.dataset.act)) return;
   const d=t.dataset;
   if(d.tab){tab=d.tab;lsSet("lf27-tab",tab);render();scrollTo(0,0);return}
@@ -1391,6 +1410,8 @@ document.addEventListener("click",async e=>{
     S[d.del]=S[d.del].filter(x=>x.id!==d.id);save();closeSheet();render();toast("已刪除")}return}
   if(d.goplace){tab="places";lsSet("lf27-tab",tab);placeFilter="";openRows.add(d.goplace);render();const el=document.querySelector(`[data-pid="${d.goplace}"]`);el&&el.scrollIntoView({block:"center"});return}
   if(d.schedule){openScheduleForm(d.schedule);return}
+  if(d.catnote){S.catNotes=S.catNotes||{};const x=prompt(`「${d.catnote}」分類的註解（留空＝刪除）`,S.catNotes[d.catnote]||"");if(x===null)return;
+    if(x.trim())S.catNotes[d.catnote]=x.trim();else delete S.catNotes[d.catnote];save();render();return}
   if(d.pfilter!==undefined){placeFilter=d.pfilter;lsSet("lf27-placefilter",placeFilter);render();return}
   if(d.cat){expCat=d.cat;document.querySelectorAll("#cats button").forEach(b=>b.classList.toggle("on",b.dataset.cat===expCat));return}
   if(d.delexp){if(confirm("刪除這筆記帳？")){S.expenses=S.expenses.filter(x=>x.id!==d.delexp);save();closeSheet();render()}return}
