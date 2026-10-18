@@ -535,6 +535,11 @@ function normalize(d){
     st.budgets=b;st.total=Object.values(b).reduce((x,y)=>x+y,0);
     d.fixed=[];d.meta.moneyV9=true;needSave=true;
   }
+  if(!d.meta.geoV11){
+    d.geo=d.geo||{};for(const k of Object.keys(d.geo))if(!d.geo[k])delete d.geo[k];
+    for(const L of Object.values(d.legs||{}))if(L.r)for(const m of Object.keys(L.r))if(L.r[m]&&L.r[m].none)delete L.r[m];
+    d.meta.geoV11=true;needSave=true;
+  }
   if(!d.meta.moneyV10){
     for(const e of d.expenses)if(e.item==null){e.item=e.note||"";e.note=""}
     d.meta.moneyV10=true;needSave=true;
@@ -741,14 +746,33 @@ function adjustAnchors(d){
 }   // 拖曳後等交通時間算好，再重算一次
 
 /* 地點座標（Photon，免費）與倫敦交通局 TfL 路線（免費）；結果存進資料，離線也看得到 */
-async function geocode(q){
-  if(q in S.geo)return S.geo[q];
-  // 「名稱, 街道」這種搜尋字，用街道部分比較準（例：後台門會被認成同名酒吧）
-  const qq=q.includes(",")?q.slice(q.indexOf(",")+1).trim()+" London":q;
-  const j=await (await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(qq)}&limit=1&lat=51.51&lon=-0.13`)).json();
-  const f=j.features&&j.features[0];let v=null;
-  if(f){const [lon,lat]=f.geometry.coordinates;if(lat>51.28&&lat<51.70&&lon>-0.56&&lon<0.31)v=[+lat.toFixed(5),+lon.toFixed(5)]}
-  S.geo[q]=v;return v;
+// 用中文名稱查會跑到台灣（例：「國家美術館」），所以只在倫敦範圍內找，並依序試幾個搜尋字
+const LDN_BBOX="-0.56,51.28,0.31,51.70";
+async function photon(q){
+  const j=await (await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1&lat=51.51&lon=-0.13&bbox=${LDN_BBOX}`)).json();
+  const f=j.features&&j.features[0];if(!f)return null;
+  const [lon,lat]=f.geometry.coordinates;return [+lat.toFixed(5),+lon.toFixed(5)];
+}
+// 行程的地點對到「地點」頁同名的項目時，用它的英文搜尋字
+function placeMatch(i){
+  const q=(i.place||"").trim();if(!q)return null;
+  const tok=n=>{const t=n.split(/\s/)[0];return t.length>=4||/[\u4e00-\u9fff]/.test(t)?t:null};
+  return S.places.find(p=>p.name===q)||S.places.find(p=>q.length>=2&&p.name.includes(q))||S.places.find(p=>{const t=tok(p.name);return t&&q.includes(t)})||null;
+}
+function geoCandidates(i){
+  const q=locOf(i),pm=placeMatch(i),c=[];
+  if(i.address)c.push(i.address);
+  if(pm&&pm.query)c.push(pm.query);
+  if(q){c.push(q.includes(",")?q.slice(q.indexOf(",")+1).trim():q);   // 「名稱, 街道」用街道部分比較準
+    const en=(q.match(/[A-Za-z][A-Za-z0-9&'’. -]{2,}/g)||[]).join(" ").trim();if(en&&en!==q)c.push(en)}
+  return [...new Set(c)];
+}
+// 給地圖和 Google Maps 用的搜尋字：優先英文
+const mapQ=i=>i.address||(placeMatch(i)||{}).query||locOf(i);
+async function geocodeItem(i){
+  const key=locOf(i);if(S.geo[key])return S.geo[key];
+  let v=null;for(const q of geoCandidates(i)){v=await photon(q);if(v)break}
+  S.geo[key]=v;return v;
 }
 async function tfl(a,b,mode){
   const m={walking:"walking",transit:"tube,bus,dlr,overground,elizabeth-line,national-rail,walking",bicycling:"cycle"}[mode];
@@ -775,7 +799,7 @@ async function ensureLegs(d){
       if(L.hidden)continue;
       const done=m=>L.r&&L.r[m];
       if(L.mode&&(L.mode==="driving"||done(L.mode)))continue;
-      const ga=await geocode(locOf(a)),gb=await geocode(locOf(b));changed=true;
+      const ga=await geocodeItem(a),gb=await geocodeItem(b);changed=true;
       L.r=L.r||{};
       if(!ga||!gb){L.mode=L.mode||"transit";L.r[L.mode]={none:true};continue}
       if(!L.mode){L.r.walking=await tfl(ga,gb,"walking");L.mode=L.r.walking.min!=null&&L.r.walking.min<=15?"walking":"transit"}
@@ -795,8 +819,8 @@ function legHtml(a,b,late){
   if(L.hidden)return `<div class="legadd"><button class="chip" data-legshow="${key}">＋ 交通</button></div>`;
   const mode=L.mode||"transit",[ic,label,flg]=MODES[mode],r=L.r&&L.r[mode],min=legMin(L);
   const open=openRows.has(key);
-  const est=min!=null?`${min} 分`:mode==="driving"?"開 Google Maps 看":r&&r.none?"倫敦以外，開 Google Maps 看":navigator.onLine?"計算中…":"連網後計算";
-  const o=encodeURIComponent(locOf(a)),dst=encodeURIComponent(locOf(b));
+  const est=min!=null?`${min} 分`:mode==="driving"?"開 Google Maps 看":r&&r.none?"找不到地點：點行程「編輯」改填英文名稱或地址":navigator.onLine?"計算中…":"連網後計算";
+  const o=encodeURIComponent(mapQ(a)),dst=encodeURIComponent(mapQ(b));
   const gm=`https://www.google.com/maps/dir/?api=1&origin=${o}&destination=${dst}&travelmode=${mode}`;
   const map=navigator.onLine?`<iframe class="map" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?saddr=${o}&daddr=${dst}&dirflg=${flg}&output=embed"></iframe>`:`<div class="mapoff">離線中：路線圖要有網路才看得到</div>`;
   const pounds=p=>"£"+(p/100).toFixed(2);
@@ -822,7 +846,7 @@ function rowHtml(i){
   const st=i.status&&STATUS[i.status]?`<span class="st ${i.status}">${STATUS[i.status]}</span>`:"";
   const det=[["地址",i.address],["營業時間",i.hours],["價位",i.price],["停留",i.stay?`${i.stay} 分`:""]].filter(([,v])=>v);
   const web=safeUrl(i.web);
-  const q=i.place||i.address;
+  const q=i.place||i.address?mapQ(i):"";
   const map=q?(navigator.onLine?(`<iframe class="map" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=15&output=embed"></iframe>`):`<div class="mapoff">離線中：地圖要有網路才看得到</div>`):"";
   return `<div class="row ${i.kind} ${open?"open":""}" data-id="${i.id}">
     <div class="hd" data-toggle="${i.id}">
