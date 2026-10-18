@@ -425,6 +425,15 @@ const PLACES_V14 = [
    desc:"⚠️ Leicester Square 一帶的私人售票店，不是官方票亭，Google 只有 3.6（10 則）。買之前先跟劇院官網或 TKTS 比價，小心被加價。",
    hours:"查詢當天 20:00 打烊"}
 ];
+// 2026-10-18 橙給了 Google 地圖連結，補上正確資料（只更新還是 V14 原值或空白的欄位）
+const PLACES_V15 = [
+  {name:"B Bagel Soho",address:"54 Wardour Street, W1D 4JF",hours:"週一–六 07:30–21:00；週日 07:30–18:30",
+   desc:"Google 4.8（2,600 多則）的貝果店，離 Piccadilly Circus 約 350 公尺。跟 Soho 另一家 It's Bagels 是不同的店。"},
+  {name:"Chestnut Bakery, Piccadilly",address:"162 Piccadilly, W1J 9ED",hours:"週一–六 07:00–20:00；週日 08:00–19:00",web:"https://chestnutbakery.com",
+   desc:"從 Belgravia 起家的烘焙坊，得過獎的可頌最有名，布里歐也是招牌，另有 cruffin、泡芙和三明治。在 Piccadilly 上，離 Fortnum & Mason 很近。Google 4.6（1,200 多則）。"},
+  {name:"Ole & Steen",query:"Ole & Steen St James's Market Haymarket London",address:"56, No 2 Haymarket, St James's Market, SW1Y 4RP",
+   hours:"週一–五 07:00–21:00；週六、日 08:00–21:00"}
+];
 const NEW_TODOS_V4 = [
   ["採購","買 eSIM（確認英國能用、天數涵蓋 2/21–2/26）","2027-02-10"],
   ["採購","買旅平險（先查信用卡附帶的旅程取消／延誤保障）","2026-11-15"],
@@ -591,6 +600,11 @@ function normalize(d){
   if(!d.meta.placesV14){
     for(const x of PLACES_V14)if(!d.places.some(p=>p.name===x.name))d.places.push({id:uid(),note:"",price:"",web:"",...x});
     d.meta.placesV14=true;needSave=true;
+  }
+  if(!d.meta.placesV15){
+    for(const x of PLACES_V15){const p=d.places.find(y=>y.name===x.name),orig=PLACES_V14.find(y=>y.name===x.name)||{};if(!p)continue;
+      for(const k of Object.keys(x))if(k!=="name"&&(!p[k]||p[k]===orig[k]))p[k]=x[k]}
+    d.meta.placesV15=true;needSave=true;
   }
   if(!d.meta.placeLinkV13){
     for(const i of d.itinerary){if(i.placeId||!i.place)continue;
