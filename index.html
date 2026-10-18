@@ -383,6 +383,48 @@ const PLACE_INFO_V5 = [
    desc:"就在國家美術館後面，收藏英國歷史人物的肖像，從都鐸王朝到當代名人、演員都有。2023 年整修後重新開放。",
    hours:"每天 10:30–18，週五、六到 21；閉館前 30 分鐘停止入場", price:"常設展免費；特展另外售票", web:"https://www.npg.org.uk"}
 ];
+// 2026-10-18 從橙的 Google 地圖清單匯入（公開店家資訊，2026/10 查）
+const PLACES_V14 = [
+  {name:"Flat Iron Soho",cat:"吃",query:"Flat Iron 17 Beak Street London",address:"17 Beak Street, W1F 9RW",
+   desc:"平價牛排名店，招牌是 Flat Iron 牛排，配菜另外點。可以線上訂位，也可以現場排。Oxford Circus、Piccadilly Circus 都走得到。Google 4.6（1 萬多則）。",
+   hours:"週日–二 11:30–22:00；週三–四到 23:00；週五–六到 23:30（各來源略有出入）",price:"招牌牛排約 £14",web:"https://flatironsteak.co.uk"},
+  {name:"Five Guys Piccadilly Circus",cat:"吃",query:"Five Guys 2 Coventry Street London",address:"2 Coventry Street, W1D 7DH",
+   desc:"美式漢堡薯條，配料可以自己選，份量大。就在 Piccadilly Circus 旁，從旅館走路幾分鐘。",
+   hours:"約週一–四 11:00–23:30、週五–六到午夜、週日到 22:30（非官方資料，出發前確認）",price:"漢堡約 £8–12（參考其他分店價格）"},
+  {name:"Bageriet",cat:"甜點咖啡",query:"Bageriet 24 Rose Street London",address:"24 Rose Street, WC2E 9EA",
+   desc:"瑞典麵包店，招牌是肉桂捲和小豆蔻捲。店很小，常常擠不進去，適合外帶。在 Covent Garden 旁。",
+   hours:"週一–五 9:00–18:30；週六 10:00–18:00 左右；週日休",web:"https://bageriet.co.uk"},
+  {name:"Maison Bertaux",cat:"甜點咖啡",query:"Maison Bertaux 28 Greek Street London",address:"28 Greek Street, W1D 5DQ",
+   desc:"1871 年開業，號稱倫敦最老的法式甜點店，在 Soho 的 Greek Street。據說吳爾芙等文人曾是常客。",
+   hours:"各來源不一（約 9:30 開門，18:00–23:00 之間打烊），出發前確認"},
+  {name:"Chestnut Bakery, Piccadilly",cat:"甜點咖啡",query:"Chestnut Bakery 162 Piccadilly London",address:"162 Piccadilly, W1J 9ED（只找到一個來源）",
+   desc:"從 Belgravia 起家的烘焙坊，得過獎的可頌最有名，也有 cruffin、泡芙和三明治。在 Piccadilly 上，離 Fortnum & Mason 很近。",
+   hours:"沒查到，出發前看 Google 地圖"},
+  {name:"Italian Bear Chocolate - Soho",cat:"甜點咖啡",query:"Italian Bear Chocolate 41 Broadwick Street London",address:"41 Broadwick Street, W1F 9QL",
+   desc:"濃稠的義式熱巧克力很有名，門口常常排隊。有訂位的話，遲到超過 10 分鐘就不保留。",
+   hours:"週一–六 10:00–23:00；週日 11:00–22:30"},
+  {name:"B Bagel Soho",cat:"甜點咖啡",query:"B Bagel 54 Wardour Street London",address:"54 Wardour Street, W1D 4JF",
+   desc:"Google 4.8（2,600 多則）的貝果店，離 Piccadilly Circus 約 350 公尺。跟 Soho 另一家 It's Bagels 是不同的店。",
+   hours:"沒查到這間的時間（另一家分店是 7:00–20:00），出發前確認"},
+  {name:"Ole & Steen",cat:"甜點咖啡",query:"Ole & Steen Haymarket London",address:"56 Haymarket 附近（各來源地址不一，以你 Google 清單上那間為準）",
+   desc:"丹麥麵包店，招牌是 Cinnamon Social 肉桂捲：整條烤好再切塊賣。",
+   hours:"約 7:30–8:00 開門，20:00–22:00 打烊（各分店不同）"},
+  {name:"Hideaway Coffee House",cat:"甜點咖啡",query:"Hideaway Coffee House 7 Farrier's Passage London",address:"7 Farrier's Passage, Soho（Brewer Street 旁的小巷）",
+   desc:"藏在 Soho 小巷庭院裡的咖啡館，Google 4.7（1,300 多則）。",
+   hours:"查詢當天 17:00 打烊；完整時間出發前看 Google 地圖"},
+  {name:"Reins London",cat:"甜點咖啡",query:"Reins London Trocadero Coventry Street",address:"The Kiosk, London Trocadero, Coventry Street, W1D 7DH",
+   desc:"Piccadilly Circus 旁 Trocadero 的咖啡小亭，Google 4.9（18 則）。評論說咖啡和早午餐都不錯，也有抹茶；尖峰時段人手少，可能要等。",
+   hours:"查詢當天 17:00 打烊",price:"每人約 £1–10",web:"https://reinslondon.co.uk"},
+  {name:"National Theatre Bookshop",cat:"逛",query:"National Theatre Bookshop London",address:"Upper Ground, South Bank, SE1 9PX（國家劇院一樓）",
+   desc:"倫敦最齊全的劇場書店：最新劇本、獨白集、劇場書籍和周邊。官網也賣 West End 的劇本（約 £10.99）。只收卡。",
+   hours:"週一–六 10:00–22:30；週日休",web:"https://shop.nationaltheatre.org.uk"},
+  {name:"Official London Theatre Ticket Booth（TKTS）",cat:"劇院",query:"TKTS Leicester Square London",address:"Leicester Square 南側的 Clocktower 建築",
+   desc:"官方的當日折扣票亭（Official London Theatre）。可以現場問哪些戲有當天優惠，也賣預售票；官網也有當日票。",
+   hours:"週一–六 10:30–18:00；週日 11:00–16:00",web:"https://officiallondontheatre.com/tkts/"},
+  {name:"Box Office / Theater Tickets",cat:"劇院",query:"7-9 Cranbourn Street London",address:"7–9 Cranbourn Street（Leicester Square 旁）",
+   desc:"⚠️ Leicester Square 一帶的私人售票店，不是官方票亭，Google 只有 3.6（10 則）。買之前先跟劇院官網或 TKTS 比價，小心被加價。",
+   hours:"查詢當天 20:00 打烊"}
+];
 const NEW_TODOS_V4 = [
   ["採購","買 eSIM（確認英國能用、天數涵蓋 2/21–2/26）","2027-02-10"],
   ["採購","買旅平險（先查信用卡附帶的旅程取消／延誤保障）","2026-11-15"],
@@ -545,6 +587,10 @@ function normalize(d){
   if(!d.meta.geoV12){
     d.geo={};for(const L of Object.values(d.legs||{}))delete L.r;
     d.meta.geoV12=true;needSave=true;
+  }
+  if(!d.meta.placesV14){
+    for(const x of PLACES_V14)if(!d.places.some(p=>p.name===x.name))d.places.push({id:uid(),note:"",price:"",web:"",...x});
+    d.meta.placesV14=true;needSave=true;
   }
   if(!d.meta.placeLinkV13){
     for(const i of d.itinerary){if(i.placeId||!i.place)continue;
@@ -723,7 +769,7 @@ const endTime=i=>{const m=toMin(i.time),st=+i.stay||0;return m!=null&&st>0?fromM
 const showTime=t=>{const m=toMin(t);return m!=null&&m>=1440?`${fromMin(m-1440)}<small class="nd">+1</small>`:esc(t||"—")};
 const ceil5=m=>Math.ceil(m/5)*5;
 const linkedPlace=i=>i&&i.placeId&&S&&S.places.find(p=>p.id===i.placeId)||null;
-const PLACE_KIND={吃:"food",逛:"sight",劇院:"show",住:"rest",交通:"move"};
+const PLACE_KIND={吃:"food",甜點咖啡:"food",逛:"sight",劇院:"show",住:"rest",交通:"move"};
 // 行程顯示用的資料：連結了地點就用地點頁的
 const eff=(i,k)=>{const lp=linkedPlace(i);return lp&&lp[k]?lp[k]:i[k]||""};
 const locOf=i=>{if(!i)return "";const lp=linkedPlace(i);return lp?(lp.query||lp.address||lp.name):(i.place||i.address||"")};
