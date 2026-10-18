@@ -904,6 +904,7 @@ const gbpRate=()=>S.settings.rate*(1+S.settings.fee/100);   // 刷卡實付：�
 const twdOf=e=>e.twd!=null?+e.twd:e.cur==="GBP"?(+e.amt||0)*gbpRate():(+e.amt||0);
 const fmtAmt=e=>e.cur==="GBP"?`£${fmtG(+e.amt)}`:`NT$ ${fmt(+e.amt)}`;
 let expCur=lsGet("lf27-cur")||"GBP";
+let expFilter=lsGet("lf27-expfilter")||"";   // 記帳紀錄的分類篩選，""＝全部
 function viewMoney(){
   const st=S.settings, cs=cats();
   const byCat=Object.fromEntries(cs.map(c=>[c,0]));
@@ -943,11 +944,14 @@ function viewMoney(){
     <button class="btn solid full" data-act="addExp">記下來</button>
   </div>
 
-  <div class="sec">記帳紀錄</div>
-  <div class="card">${exps.map(e=>{const p=e.day?dParts(e.day):null;return `<div class="exp" data-editexp="${e.id}">
+  ${(()=>{const has=[...new Set(exps.map(e=>e.cat))];if(expFilter&&!has.includes(expFilter))expFilter="";
+    const list=expFilter?exps.filter(e=>e.cat===expFilter):exps,sum=list.reduce((a,e)=>a+twdOf(e),0);
+    return `<details class="grp" ${od("records",true)}><summary class="sec" style="--sc:var(--green)">記帳紀錄 <span class="muted">${exps.length} 筆</span>${CARET}</summary>
+  ${exps.length?`<div class="cats" style="margin:4px 0 10px"><button data-expf="" class="${expFilter?"":"on"}">全部</button>${[...cats(),...has.filter(c=>!cats().includes(c))].filter(c=>has.includes(c)).map(c=>`<button data-expf="${esc(c)}" class="${c===expFilter?"on":""}">${esc(c)} ${exps.filter(e=>e.cat===c).length}</button>`).join("")}</div>`:""}
+  <div class="card">${list.map(e=>{const p=e.day?dParts(e.day):null;return `<div class="exp" data-editexp="${e.id}">
     <span class="dt">${p?`${p.m}/${p.d}`:"—"}</span><span class="c">${esc(e.cat)}</span><div class="n">${esc(e.item||"（未填項目）")}${e.note?`<div class="muted">${esc(e.note)}</div>`:""}</div>
     <div class="a">${fmtAmt(e)}${e.cur==="GBP"?`<small>NT$ ${fmt(twdOf(e))}</small>`:""}</div></div>`}).join("")||`<p class="muted" style="margin:0">還沒有紀錄。</p>`}
-    ${exps.length?`<p class="hint">點一筆可以修改或刪除。共 ${exps.length} 筆，合計 NT$ ${fmt(spent)}。</p>`:""}</div>
+    ${list.length?`<p class="hint">點一筆可以修改或刪除。${expFilter?`「${esc(expFilter)}」`:""}共 ${list.length} 筆，合計 NT$ ${fmt(sum)}。</p>`:""}</div></details>`})()}
   </main>`;
 }
 function updateConv(){
@@ -1227,7 +1231,7 @@ document.addEventListener("click",async e=>{
     if(v.legshow){L.hidden=false}
     adjustAnchors(day);save();render();if(v.legshow)ensureLegs(day);return;
   }
-  const t=e.target.closest("[data-tab],[data-day],[data-add],[data-edit],[data-del],[data-act],[data-cat],[data-delexp],[data-editexp],[data-toggle],[data-cur],[data-budget],[data-catren],[data-catdel]");
+  const t=e.target.closest("[data-tab],[data-day],[data-add],[data-edit],[data-del],[data-act],[data-cat],[data-delexp],[data-editexp],[data-toggle],[data-cur],[data-budget],[data-catren],[data-catdel],[data-expf]");
   if(!t||!S&&!["syncNow"].includes(t.dataset.act)) return;
   const d=t.dataset;
   if(d.tab){tab=d.tab;lsSet("lf27-tab",tab);render();scrollTo(0,0);return}
@@ -1239,6 +1243,7 @@ document.addEventListener("click",async e=>{
   if(d.cat){expCat=d.cat;document.querySelectorAll("#cats button").forEach(b=>b.classList.toggle("on",b.dataset.cat===expCat));return}
   if(d.delexp){if(confirm("刪除這筆記帳？")){S.expenses=S.expenses.filter(x=>x.id!==d.delexp);save();closeSheet();render()}return}
   if(d.editexp){openExpForm(d.editexp);return}
+  if(d.expf!==undefined){expFilter=d.expf;lsSet("lf27-expfilter",expFilter);render();return}
   if(d.cur){expCur=d.cur;lsSet("lf27-cur",expCur);render();return}
   if(d.budget){editBudget(d.budget);return}
   if(d.catren){catAction("ren",+d.catren);return}
