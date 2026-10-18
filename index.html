@@ -127,6 +127,7 @@ input.f:focus,select.f:focus,textarea.f:focus{background:#fffbe0}
 .totalcard .muted{color:var(--ink)} .totalcard .kv{border-color:rgba(0,0,0,.25)}
 .exp{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1.5px dashed var(--line)}
 .exp:last-child{border-bottom:0}
+.exp{cursor:pointer}
 .exp .c{font-size:11px;font-weight:700;border:1.5px solid var(--ink);border-radius:99px;padding:0 7px;white-space:nowrap;background:var(--yellow)}
 .exp .n{flex:1;min-width:0;font-size:14px}
 .exp .a{text-align:right;font-variant-numeric:tabular-nums;font-size:14px;font-weight:700}
@@ -884,8 +885,8 @@ function viewMoney(){
     return `<div style="margin-bottom:10px"><div class="kv" style="border:0;padding:0"><span>${c}</span><b>${fmt(v)}${b?` / ${fmt(b)}`:""}</b></div>
       ${b?`<div class="bar ${v>b?"over":""}"><i style="width:${pct}%"></i></div><div class="muted">${v>b?`超出 NT$ ${fmt(v-b)}`:`還剩 NT$ ${fmt(b-v)}`}</div>`:`<div class="muted">未設預算</div>`}</div>`}).join("")}</div>
   <div class="sec">記帳紀錄</div>
-  <div class="card">${exps.map(e=>`<div class="exp"><span class="c">${esc(e.cat)}</span><div class="n">${esc(e.note||"（無備註）")}<div class="muted">${esc(e.day||"")}</div></div>
-    <div class="a">£${fmtG(+e.gbp)}<small>NT$ ${fmt(toTWD(+e.gbp))}</small></div><button class="x" data-delexp="${e.id}" aria-label="刪除">✕</button></div>`).join("")||`<p class="muted" style="margin:0">還沒有紀錄。</p>`}</div>
+  <div class="card">${exps.map(e=>`<div class="exp" data-editexp="${e.id}"><span class="c">${esc(e.cat)}</span><div class="n">${esc(e.note||"（無備註）")}<div class="muted">${esc(e.day||"")}</div></div>
+    <div class="a">£${fmtG(+e.gbp)}<small>NT$ ${fmt(toTWD(+e.gbp))}</small></div><button class="x" aria-label="編輯">✎</button></div>`).join("")||`<p class="muted" style="margin:0">還沒有紀錄。</p>`}<p class="hint">點一筆可以修改或刪除。</p></div>
   <div class="sec">已付大項</div>
   <div class="card">${S.fixed.map(f=>`<div class="kv"><span>${esc(f.name)}</span><span><b>NT$ ${fmt(+f.twd)}</b> <button class="x" data-edit="fixed" data-id="${f.id}">✎</button></span></div>`).join("")}
     <button class="add" data-add="fixed" style="margin-bottom:0">＋ 新增已付項目</button></div>
@@ -1052,6 +1053,24 @@ function openForm(coll,id,group){
     }
     save();closeSheet();render();toast("已儲存");};
 }
+/* 編輯一筆記帳：英鎊、台幣兩格互相即時換算（存的是英鎊，台幣依目前匯率＋手續費算） */
+function openExpForm(id){
+  const e=S.expenses.find(x=>x.id===id);if(!e)return;
+  const k=S.settings.rate*(1+S.settings.fee/100);
+  openSheet(`<h3>編輯記帳</h3><form id="expf">
+    <div class="row2"><div><label>英鎊 £</label><input class="f" name="gbp" inputmode="decimal" value="${fmtG(+e.gbp).replace(/,/g,"")}"></div>
+    <div><label>台幣 NT$</label><input class="f" name="twd" inputmode="decimal" value="${Math.round(toTWD(+e.gbp))}"></div></div>
+    <p class="hint">輸入任一格，另一格會自動換算（匯率 ${S.settings.rate}＋手續費 ${S.settings.fee}%）</p>
+    <label>類別</label><select class="f" name="cat">${CATS.map(c=>`<option ${c===e.cat?"selected":""}>${c}</option>`).join("")}</select>
+    <label>日期</label><input class="f" name="day" type="date" value="${esc(e.day||"")}">
+    <label>備註</label><input class="f" name="note" value="${esc(e.note||"")}">
+    <div class="foot"><button type="button" class="btn danger" data-delexp="${e.id}">刪除</button><button type="button" class="btn ghost" data-act="close">取消</button><button class="btn solid" style="flex:1">儲存</button></div></form>`);
+  const f=$("#expf"),num=v=>parseFloat(String(v).replace(/,/g,""));
+  f.gbp.oninput=()=>{const v=num(f.gbp.value);f.twd.value=isNaN(v)?"":Math.round(v*k)};
+  f.twd.oninput=()=>{const v=num(f.twd.value);f.gbp.value=isNaN(v)?"":(Math.round(v/k*100)/100)};
+  f.onsubmit=ev=>{ev.preventDefault();const g=num(f.gbp.value);if(!(g>0)){toast("金額要大於 0");return}
+    e.gbp=Math.round(g*100)/100;e.cat=f.cat.value;e.day=f.day.value;e.note=f.note.value.trim();save();closeSheet();render();toast("已更新");};
+}
 function openDayForm(){
   const p=dParts(day);
   openSheet(`<h3>${p.m}/${p.d} 的區域名</h3><form id="dayf"><input class="f" name="area" value="${esc(S.days[day]||"")}" placeholder="例：Soho・Carnaby">
@@ -1120,7 +1139,7 @@ document.addEventListener("click",async e=>{
     if(v.legshow){L.hidden=false}
     adjustAnchors(day);save();render();if(v.legshow)ensureLegs(day);return;
   }
-  const t=e.target.closest("[data-tab],[data-day],[data-add],[data-edit],[data-del],[data-act],[data-cat],[data-delexp],[data-toggle]");
+  const t=e.target.closest("[data-tab],[data-day],[data-add],[data-edit],[data-del],[data-act],[data-cat],[data-delexp],[data-editexp],[data-toggle]");
   if(!t||!S&&!["syncNow"].includes(t.dataset.act)) return;
   const d=t.dataset;
   if(d.tab){tab=d.tab;lsSet("lf27-tab",tab);render();scrollTo(0,0);return}
@@ -1130,7 +1149,8 @@ document.addEventListener("click",async e=>{
   if(d.edit){e.preventDefault();openForm(d.edit,d.id);return}
   if(d.del){if(confirm("確定刪除？")){S[d.del]=S[d.del].filter(x=>x.id!==d.id);save();closeSheet();render();toast("已刪除")}return}
   if(d.cat){expCat=d.cat;document.querySelectorAll("#cats button").forEach(b=>b.classList.toggle("on",b.dataset.cat===expCat));return}
-  if(d.delexp){if(confirm("刪除這筆記帳？")){S.expenses=S.expenses.filter(x=>x.id!==d.delexp);save();render()}return}
+  if(d.delexp){if(confirm("刪除這筆記帳？")){S.expenses=S.expenses.filter(x=>x.id!==d.delexp);save();closeSheet();render()}return}
+  if(d.editexp){openExpForm(d.editexp);return}
   switch(d.act){
     case "close":closeSheet();break;
     case "editDay":openDayForm();break;
