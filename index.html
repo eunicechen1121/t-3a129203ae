@@ -128,6 +128,17 @@ input.f:focus,select.f:focus,textarea.f:focus{background:#fffbe0}
 .exp{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1.5px dashed var(--line)}
 .exp:last-child{border-bottom:0}
 .exp{cursor:pointer}
+.exp .dt{font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;width:38px;flex:0 0 38px;color:var(--muted)}
+details.bud{background:var(--blue);border:2px solid var(--ink);border-radius:12px;box-shadow:var(--shadow);padding:12px 14px;margin:6px 0 4px}
+details.bud>summary{align-items:flex-start}
+.budsum{flex:1;min-width:0}
+.budt{font-family:var(--chunky);font-weight:900;font-size:17px;margin-bottom:6px}
+.budsum .big{font-family:var(--chunky);font-weight:900;font-size:26px}
+.budsum .muted,.budbody .muted{color:#1d1b18b0}
+.budbody{margin-top:12px;padding-top:10px;border-top:1.5px dashed #0003}
+.budbody .kv{border-color:#0002}
+.budrow{margin-bottom:10px}
+.curs{margin-bottom:2px}
 .exp .c{font-size:11px;font-weight:700;border:1.5px solid var(--ink);border-radius:99px;padding:0 7px;white-space:nowrap;background:var(--yellow)}
 .exp .n{flex:1;min-width:0;font-size:14px}
 .exp .a{text-align:right;font-variant-numeric:tabular-nums;font-size:14px;font-weight:700}
@@ -313,7 +324,7 @@ const DAYS = ["2027-02-21","2027-02-22","2027-02-23","2027-02-24","2027-02-25","
 const KINDS = {flight:"飛機",transit:"轉機",move:"交通",show:"看戲",food:"吃",sight:"逛",rest:"休息",note:"備註"};
 const STATUS = {booked:"✓ 已預約",todo:"待訂",none:"不用訂"};
 const TZS = ["台北","曼谷","倫敦"];
-const CATS = ["餐飲","交通","戲票","周邊購物","其他"];
+const CATS = ["餐飲","交通","住宿","戲票","購物","其他"];   // 預設記帳分類，使用者可在 App 裡改
 const SHOW_STATUS = ["已買","抽籤中","保底","中了","沒中","放棄"];
 const TODO_GROUP = "出發前";
 const PACK_GROUPS = ["證件","衣物","電子","盥洗","看戲用品","其他"];
@@ -500,6 +511,29 @@ function normalize(d){
     if(old)Object.assign(old,f4);
     else if(!d.itinerary.some(i=>i.day==="2027-02-25"&&/Falsettos/.test(i.title)))d.itinerary.push({id:uid(),day:"2027-02-25",tz:"",hours:"",price:"",web:"",...f4});
     d.meta.f4V8=true;needSave=true;
+  }
+  if(!d.meta.moneyV9){
+    // 已付大項併進記帳紀錄、每筆記原幣別＋當下台幣、分類與預算改版（2026-10-18）
+    const st=d.settings,old=st.budgets||{};
+    st.cats=[...CATS];
+    for(const e of d.expenses){
+      if(e.cat==="周邊購物")e.cat="購物";
+      if(e.cur==null){e.cur="GBP";e.amt=+e.gbp||0;e.twd=Math.round(e.amt*st.rate*(1+st.fee/100));delete e.gbp}
+      if(!e.day&&e.ts)e.day=new Date(e.ts).toISOString().slice(0,10);
+    }
+    const add={};
+    for(const f of d.fixed){
+      if(/ETA/.test(f.name))continue;   // 還沒付款，付了再記
+      const cat=/機票|航班/.test(f.name)?"交通":/晚|住宿|旅館|飯店/.test(f.name)?"住宿":/Falsettos|戲|票/.test(f.name)?"戲票":"其他";
+      const m=f.name.match(/£\s*([\d.,]+)/),twd=Math.round(+f.twd||0);
+      d.expenses.push({id:uid(),ts:Date.now(),day:/④/.test(f.name)?"2026-10-18":"2026-10-15",cat,
+        cur:m?"GBP":"TWD",amt:m?+m[1].replace(/,/g,""):twd,twd,note:f.name.replace(/（£[^）]*）/,"").trim()});
+      add[cat]=(add[cat]||0)+twd;
+    }
+    const b={餐飲:+old["餐飲"]||8000,交通:(+old["交通"]||2500)+(add["交通"]||0),住宿:add["住宿"]||0,
+      戲票:(+old["戲票"]||0)+(add["戲票"]||0),購物:+old["周邊購物"]||+old["購物"]||0,其他:(+old["其他"]||0)+859+(add["其他"]||0)};
+    st.budgets=b;st.total=Object.values(b).reduce((x,y)=>x+y,0);
+    d.fixed=[];d.meta.moneyV9=true;needSave=true;
   }
   const ids=new Set(d.itinerary.map(i=>i.id));
   for(const k of Object.keys(d.legs)){const [x,y]=k.split(">");if(!ids.has(x)||!ids.has(y))delete d.legs[k]}
@@ -859,45 +893,113 @@ function endDrag(){
 document.addEventListener("pointerup",endDrag);
 document.addEventListener("pointercancel",endDrag);
 
-/* ---------- 記帳 ---------- */
+/* ---------- 記帳 ----------
+   每筆：cur（GBP／TWD）＋amt（原幣金額）＋twd（記帳當下的台幣，之後改匯率也不變） */
+const cats=()=>S.settings.cats&&S.settings.cats.length?S.settings.cats:CATS;
+const gbpRate=()=>S.settings.rate*(1+S.settings.fee/100);   // 刷卡實付：匯率＋手續費
+const twdOf=e=>e.twd!=null?+e.twd:e.cur==="GBP"?(+e.amt||0)*gbpRate():(+e.amt||0);
+const fmtAmt=e=>e.cur==="GBP"?`£${fmtG(+e.amt)}`:`NT$ ${fmt(+e.amt)}`;
+let expCur=lsGet("lf27-cur")||"GBP";
 function viewMoney(){
-  const st=S.settings;
-  const fixedSum=S.fixed.reduce((a,f)=>a+(+f.twd||0),0);
-  const byCat=Object.fromEntries(CATS.map(c=>[c,0]));
-  S.expenses.forEach(e=>byCat[e.cat]=(byCat[e.cat]||0)+toTWD(+e.gbp||0));
+  const st=S.settings, cs=cats();
+  const byCat=Object.fromEntries(cs.map(c=>[c,0]));
+  S.expenses.forEach(e=>byCat[e.cat]=(byCat[e.cat]||0)+twdOf(e));
   const spent=Object.values(byCat).reduce((a,b)=>a+b,0);
-  const exps=[...S.expenses].sort((a,b)=>b.ts-a.ts);
+  const total=+st.total||0, catSum=cs.reduce((a,c)=>a+(+st.budgets[c]||0),0);
+  const pct=total?Math.min(100,spent/total*100):0;
+  if(!cs.includes(expCat))expCat=cs[0];
+  const exps=[...S.expenses].sort((a,b)=>(b.day||"").localeCompare(a.day||"")||(b.ts||0)-(a.ts||0));
+  const bar=(v,b)=>b?`<div class="bar ${v>b?"over":""}"><i style="width:${Math.min(100,v/b*100)}%"></i></div>`:"";
   return `<main>
+  <details class="grp bud" ${od("budget",true)}>
+    <summary><div class="budsum">
+      <div class="budt">預算與花費</div>
+      <div class="kv" style="border:0;padding:0"><span>目前總花費</span><b class="big">NT$ ${fmt(spent)}</b></div>
+      <div class="kv" style="border:0;padding:0"><span>總預算</span><b>${total?`NT$ ${fmt(total)}`:"未設定"}</b></div>
+      ${total?`${bar(spent,total)}<div class="muted">${spent>total?`超出 NT$ ${fmt(spent-total)}`:`還剩 NT$ ${fmt(total-spent)}（${Math.round(pct)}%）`}</div>`:""}
+    </div>${CARET}</summary>
+    <div class="budbody">
+      <div class="kv"><span>總預算</span><span><b>${total?`NT$ ${fmt(total)}`:"未設定"}</b> <button class="x" data-budget="__total">✎</button></span></div>
+      <div class="muted" style="margin:2px 0 10px">各類加起來 NT$ ${fmt(catSum)}${total?`，${total>=catSum?`還沒分配 NT$ ${fmt(total-catSum)}`:`比總預算多 NT$ ${fmt(catSum-total)}`}`:""}</div>
+      ${cs.map(c=>{const b=+st.budgets[c]||0,v=byCat[c]||0;
+        return `<div class="budrow"><div class="kv" style="border:0;padding:0"><span>${esc(c)}</span><span><b>${fmt(v)}${b?` / ${fmt(b)}`:""}</b> <button class="x" data-budget="${esc(c)}">✎</button></span></div>
+        ${b?`${bar(v,b)}<div class="muted">${v>b?`超出 NT$ ${fmt(v-b)}`:`還剩 NT$ ${fmt(b-v)}`}</div>`:`<div class="muted">未設預算</div>`}</div>`}).join("")}
+      <button class="btn ghost full" data-act="manageCats" style="margin-top:6px">管理分類</button>
+    </div>
+  </details>
+
+  <div class="sec">新增記帳</div>
   <div class="card conv">
-    <div class="bigin"><span>£</span><input id="gbpIn" type="text" inputmode="decimal" placeholder="0" autocomplete="off"></div>
-    <div><div class="result" id="twdOut">NT$ 0</div>
-      <div class="muted" id="afterOut">記下來後總花費：NT$ ${fmt(fixedSum+spent)}</div>
-      <p class="hint">匯率 ${st.rate}＋手續費 ${st.fee}%（右上 ⚙︎ 可改）</p></div>
-    <div class="cats" id="cats">${CATS.map(c=>`<button data-cat="${c}" class="${c===expCat?"on":""}">${c}</button>`).join("")}</div>
-    <input class="f" id="noteIn" placeholder="備註（例：Pret 早餐）">
+    <div class="cats curs"><button data-cur="GBP" class="${expCur==="GBP"?"on":""}">£ 英鎊</button><button data-cur="TWD" class="${expCur==="TWD"?"on":""}">NT$ 台幣</button></div>
+    <div class="bigin"><span>${expCur==="GBP"?"£":"NT$"}</span><input id="amtIn" type="text" inputmode="decimal" placeholder="0" autocomplete="off"></div>
+    <div class="muted" id="convOut">${expCur==="GBP"?`≈ NT$ 0（匯率 ${st.rate}＋手續費 ${st.fee}%）`:`≈ £0`}</div>
+    <div class="cats" id="cats">${cs.map(c=>`<button data-cat="${esc(c)}" class="${c===expCat?"on":""}">${esc(c)}</button>`).join("")}</div>
+    <div class="row2"><input class="f" id="dayIn" type="date" value="${todayISO()}"><input class="f" id="noteIn" placeholder="備註（例：Pret 早餐）"></div>
     <button class="btn solid full" data-act="addExp">記下來</button>
   </div>
-  <div class="card totalcard"><div class="muted">目前總花費</div><div class="total">NT$ ${fmt(fixedSum+spent)}</div>
-    <div class="kv"><span>已付大項</span><b>NT$ ${fmt(fixedSum)}</b></div>
-    <div class="kv"><span>旅途中記帳</span><b>NT$ ${fmt(spent)}</b></div></div>
-  <div class="sec">各類別 vs 預算</div>
-  <div class="card">${CATS.map(c=>{const b=+st.budgets[c]||0, v=byCat[c]||0, pct=b?Math.min(100,v/b*100):0;
-    return `<div style="margin-bottom:10px"><div class="kv" style="border:0;padding:0"><span>${c}</span><b>${fmt(v)}${b?` / ${fmt(b)}`:""}</b></div>
-      ${b?`<div class="bar ${v>b?"over":""}"><i style="width:${pct}%"></i></div><div class="muted">${v>b?`超出 NT$ ${fmt(v-b)}`:`還剩 NT$ ${fmt(b-v)}`}</div>`:`<div class="muted">未設預算</div>`}</div>`}).join("")}</div>
+
   <div class="sec">記帳紀錄</div>
-  <div class="card">${exps.map(e=>`<div class="exp" data-editexp="${e.id}"><span class="c">${esc(e.cat)}</span><div class="n">${esc(e.note||"（無備註）")}<div class="muted">${esc(e.day||"")}</div></div>
-    <div class="a">£${fmtG(+e.gbp)}<small>NT$ ${fmt(toTWD(+e.gbp))}</small></div><button class="x" aria-label="編輯">✎</button></div>`).join("")||`<p class="muted" style="margin:0">還沒有紀錄。</p>`}<p class="hint">點一筆可以修改或刪除。</p></div>
-  <div class="sec">已付大項</div>
-  <div class="card">${S.fixed.map(f=>`<div class="kv"><span>${esc(f.name)}</span><span><b>NT$ ${fmt(+f.twd)}</b> <button class="x" data-edit="fixed" data-id="${f.id}">✎</button></span></div>`).join("")}
-    <button class="add" data-add="fixed" style="margin-bottom:0">＋ 新增已付項目</button></div>
+  <div class="card">${exps.map(e=>{const p=e.day?dParts(e.day):null;return `<div class="exp" data-editexp="${e.id}">
+    <span class="dt">${p?`${p.m}/${p.d}`:"—"}</span><span class="c">${esc(e.cat)}</span><div class="n">${esc(e.note||"（無備註）")}</div>
+    <div class="a">${fmtAmt(e)}${e.cur==="GBP"?`<small>NT$ ${fmt(twdOf(e))}</small>`:""}</div></div>`}).join("")||`<p class="muted" style="margin:0">還沒有紀錄。</p>`}
+    ${exps.length?`<p class="hint">點一筆可以修改或刪除。共 ${exps.length} 筆，合計 NT$ ${fmt(spent)}。</p>`:""}</div>
   </main>`;
 }
 function updateConv(){
-  const v=parseFloat(($("#gbpIn").value||"").replace(/,/g,""))||0;
-  const fixedSum=S.fixed.reduce((a,f)=>a+(+f.twd||0),0);
-  const spent=S.expenses.reduce((a,e)=>a+toTWD(+e.gbp||0),0);
-  $("#twdOut").textContent="NT$ "+fmt(toTWD(v));
-  $("#afterOut").textContent=`記下來後總花費：NT$ ${fmt(fixedSum+spent+toTWD(v))}`;
+  const v=parseFloat(($("#amtIn").value||"").replace(/,/g,""))||0;
+  $("#convOut").textContent=expCur==="GBP"?`≈ NT$ ${fmt(v*gbpRate())}（匯率 ${S.settings.rate}＋手續費 ${S.settings.fee}%）`:`≈ £${fmtG(v/gbpRate())}`;
+}
+function addExpense(){
+  const v=parseFloat(($("#amtIn").value||"").replace(/,/g,""));if(!(v>0)){toast("先輸入金額");return}
+  const amt=expCur==="GBP"?Math.round(v*100)/100:Math.round(v);
+  const e={id:uid(),ts:Date.now(),day:$("#dayIn").value||todayISO(),cat:expCat,cur:expCur,amt,note:$("#noteIn").value.trim()};
+  e.twd=Math.round(expCur==="GBP"?amt*gbpRate():amt);
+  S.expenses.push(e);save();render();toast(`已記下 ${fmtAmt(e)}${expCur==="GBP"?`＝NT$ ${fmt(e.twd)}`:""}`);
+}
+/* 編輯一筆：英鎊、台幣兩格互相即時換算；「記帳幣別」決定列表主要顯示哪一種 */
+function openExpForm(id){
+  const e=S.expenses.find(x=>x.id===id);if(!e)return;
+  const k=gbpRate(),t=twdOf(e),g=e.cur==="GBP"?+e.amt:t/k;
+  openSheet(`<h3>編輯記帳</h3><form id="expf">
+    <label>記帳幣別</label><select class="f" name="cur"><option value="GBP" ${e.cur==="GBP"?"selected":""}>£ 英鎊</option><option value="TWD" ${e.cur!=="GBP"?"selected":""}>NT$ 台幣</option></select>
+    <div class="row2"><div><label>英鎊 £</label><input class="f" name="gbp" inputmode="decimal" value="${Math.round(g*100)/100}"></div>
+    <div><label>台幣 NT$</label><input class="f" name="twd" inputmode="decimal" value="${Math.round(t)}"></div></div>
+    <p class="hint">輸入任一格，另一格會自動換算（匯率 ${S.settings.rate}＋手續費 ${S.settings.fee}%）。存的是台幣那格的金額。</p>
+    <label>分類</label><select class="f" name="cat">${[...new Set([...cats(),e.cat])].map(c=>`<option ${c===e.cat?"selected":""}>${esc(c)}</option>`).join("")}</select>
+    <label>日期</label><input class="f" name="day" type="date" value="${esc(e.day||"")}">
+    <label>備註</label><input class="f" name="note" value="${esc(e.note||"")}">
+    <div class="foot"><button type="button" class="btn danger" data-delexp="${e.id}">刪除</button><button type="button" class="btn ghost" data-act="close">取消</button><button class="btn solid" style="flex:1">儲存</button></div></form>`);
+  const f=$("#expf"),num=v=>parseFloat(String(v).replace(/,/g,""));
+  f.gbp.oninput=()=>{const v=num(f.gbp.value);f.twd.value=isNaN(v)?"":Math.round(v*k)};
+  f.twd.oninput=()=>{const v=num(f.twd.value);f.gbp.value=isNaN(v)?"":(Math.round(v/k*100)/100)};
+  f.onsubmit=ev=>{ev.preventDefault();const tw=num(f.twd.value),gb=num(f.gbp.value);if(!(tw>0)){toast("金額要大於 0");return}
+    e.cur=f.cur.value;e.amt=e.cur==="GBP"?Math.round(gb*100)/100:Math.round(tw);e.twd=Math.round(tw);
+    e.cat=f.cat.value;e.day=f.day.value;e.note=f.note.value.trim();delete e.gbp;save();closeSheet();render();toast("已更新");};
+}
+function editBudget(c){
+  const st=S.settings,cur=c==="__total"?st.total:st.budgets[c];
+  const x=prompt(c==="__total"?"總預算（台幣）":`「${c}」預算（台幣，0＝不設）`,cur||"");if(x===null)return;
+  const v=Math.max(0,Math.round(parseFloat(x.replace(/,/g,""))||0));
+  if(c==="__total")st.total=v;else st.budgets[c]=v;save();render();
+}
+function openCatsForm(){
+  const cs=cats(),used=c=>S.expenses.filter(e=>e.cat===c).length;
+  openSheet(`<h3>管理分類</h3>
+    <div class="card" style="padding:4px 14px">${cs.map((c,i)=>`<div class="kv"><span>${esc(c)} <span class="muted">${used(c)} 筆</span></span>
+      <span><button class="chip" data-catren="${i}">改名</button> ${cs.length>1?`<button class="chip" data-catdel="${i}">刪除</button>`:""}</span></div>`).join("")}</div>
+    <div class="row2" style="margin-top:8px"><input class="f" id="newCat" placeholder="新分類名稱"><button class="btn" data-act="addCat" style="flex:0 0 auto">新增</button></div>
+    <p class="hint">刪除分類時，那個分類的紀錄會移到「${esc(cs.includes("其他")?"其他":cs[0])}」。</p>
+    <div class="foot"><button class="btn solid full" data-act="close">完成</button></div>`);
+}
+function catAction(kind,i){
+  const st=S.settings,cs=[...cats()],c=cs[i];
+  if(kind==="add"){const n=$("#newCat").value.trim();if(!n||cs.includes(n)){toast(n?"已經有這個分類":"先輸入名稱");return}cs.push(n);st.cats=cs}
+  if(kind==="ren"){const n=(prompt("新的名稱",c)||"").trim();if(!n||n===c)return;if(cs.includes(n)){toast("已經有這個分類");return}
+    cs[i]=n;st.cats=cs;S.expenses.forEach(e=>{if(e.cat===c)e.cat=n});if(c in st.budgets){st.budgets[n]=st.budgets[c];delete st.budgets[c]}if(expCat===c)expCat=n}
+  if(kind==="del"){const to=cs.includes("其他")&&c!=="其他"?"其他":cs.find(x=>x!==c);
+    if(!confirm(`刪除「${c}」？${S.expenses.some(e=>e.cat===c)?`它的紀錄會移到「${to}」。`:""}`))return;
+    cs.splice(i,1);st.cats=cs;S.expenses.forEach(e=>{if(e.cat===c)e.cat=to});delete st.budgets[c]}
+  save();render();openCatsForm();
 }
 
 /* ---------- 戲票 ---------- */
@@ -1053,24 +1155,6 @@ function openForm(coll,id,group){
     }
     save();closeSheet();render();toast("已儲存");};
 }
-/* 編輯一筆記帳：英鎊、台幣兩格互相即時換算（存的是英鎊，台幣依目前匯率＋手續費算） */
-function openExpForm(id){
-  const e=S.expenses.find(x=>x.id===id);if(!e)return;
-  const k=S.settings.rate*(1+S.settings.fee/100);
-  openSheet(`<h3>編輯記帳</h3><form id="expf">
-    <div class="row2"><div><label>英鎊 £</label><input class="f" name="gbp" inputmode="decimal" value="${fmtG(+e.gbp).replace(/,/g,"")}"></div>
-    <div><label>台幣 NT$</label><input class="f" name="twd" inputmode="decimal" value="${Math.round(toTWD(+e.gbp))}"></div></div>
-    <p class="hint">輸入任一格，另一格會自動換算（匯率 ${S.settings.rate}＋手續費 ${S.settings.fee}%）</p>
-    <label>類別</label><select class="f" name="cat">${CATS.map(c=>`<option ${c===e.cat?"selected":""}>${c}</option>`).join("")}</select>
-    <label>日期</label><input class="f" name="day" type="date" value="${esc(e.day||"")}">
-    <label>備註</label><input class="f" name="note" value="${esc(e.note||"")}">
-    <div class="foot"><button type="button" class="btn danger" data-delexp="${e.id}">刪除</button><button type="button" class="btn ghost" data-act="close">取消</button><button class="btn solid" style="flex:1">儲存</button></div></form>`);
-  const f=$("#expf"),num=v=>parseFloat(String(v).replace(/,/g,""));
-  f.gbp.oninput=()=>{const v=num(f.gbp.value);f.twd.value=isNaN(v)?"":Math.round(v*k)};
-  f.twd.oninput=()=>{const v=num(f.twd.value);f.gbp.value=isNaN(v)?"":(Math.round(v/k*100)/100)};
-  f.onsubmit=ev=>{ev.preventDefault();const g=num(f.gbp.value);if(!(g>0)){toast("金額要大於 0");return}
-    e.gbp=Math.round(g*100)/100;e.cat=f.cat.value;e.day=f.day.value;e.note=f.note.value.trim();save();closeSheet();render();toast("已更新");};
-}
 function openDayForm(){
   const p=dParts(day);
   openSheet(`<h3>${p.m}/${p.d} 的區域名</h3><form id="dayf"><input class="f" name="area" value="${esc(S.days[day]||"")}" placeholder="例：Soho・Carnaby">
@@ -1084,8 +1168,7 @@ function openSettings(){
   openSheet(`<h3>設定</h3><form id="setf">
     <div class="row2"><div><label>匯率（1 英鎊＝台幣）</label><input class="f" name="rate" inputmode="decimal" value="${st.rate}"></div>
     <div><label>海外手續費 %</label><input class="f" name="fee" inputmode="decimal" value="${st.fee}"></div></div>
-    <label>各類預算（台幣，0＝不設）</label>
-    ${CATS.map(c=>`<div class="row2" style="align-items:center;margin-bottom:6px"><span style="flex:0 0 80px">${c}</span><input class="f" name="b_${c}" inputmode="numeric" value="${st.budgets[c]||0}"></div>`).join("")}
+    <p class="hint">預算移到「記帳」頁最上方的「預算與花費」裡設定。</p>
     <div class="foot"><button type="button" class="btn ghost" data-act="close">取消</button><button class="btn solid" style="flex:1">儲存設定</button></div></form>
 
     <div class="sec">雲端同步</div>
@@ -1103,7 +1186,6 @@ function openSettings(){
     <p class="hint">鎖定後要重新輸入密碼，資料會從雲端重新下載。</p>`);
   $("#setf").onsubmit=e=>{e.preventDefault();const fd=new FormData(e.target);
     st.rate=parseFloat(fd.get("rate"))||st.rate; st.fee=parseFloat(fd.get("fee"))||0;
-    CATS.forEach(c=>st.budgets[c]=parseFloat(fd.get("b_"+c))||0);
     save();closeSheet();render();toast("設定已更新");};
   const tf=$("#tokf");if(tf)tf.onsubmit=e=>{e.preventDefault();const t=new FormData(e.target).get("tok").trim();if(!t)return;
     lsSet("lf27-token",t);syncState="";closeSheet();toast("金鑰已儲存，同步中…");sync()};
@@ -1139,7 +1221,7 @@ document.addEventListener("click",async e=>{
     if(v.legshow){L.hidden=false}
     adjustAnchors(day);save();render();if(v.legshow)ensureLegs(day);return;
   }
-  const t=e.target.closest("[data-tab],[data-day],[data-add],[data-edit],[data-del],[data-act],[data-cat],[data-delexp],[data-editexp],[data-toggle]");
+  const t=e.target.closest("[data-tab],[data-day],[data-add],[data-edit],[data-del],[data-act],[data-cat],[data-delexp],[data-editexp],[data-toggle],[data-cur],[data-budget],[data-catren],[data-catdel]");
   if(!t||!S&&!["syncNow"].includes(t.dataset.act)) return;
   const d=t.dataset;
   if(d.tab){tab=d.tab;lsSet("lf27-tab",tab);render();scrollTo(0,0);return}
@@ -1151,11 +1233,16 @@ document.addEventListener("click",async e=>{
   if(d.cat){expCat=d.cat;document.querySelectorAll("#cats button").forEach(b=>b.classList.toggle("on",b.dataset.cat===expCat));return}
   if(d.delexp){if(confirm("刪除這筆記帳？")){S.expenses=S.expenses.filter(x=>x.id!==d.delexp);save();closeSheet();render()}return}
   if(d.editexp){openExpForm(d.editexp);return}
+  if(d.cur){expCur=d.cur;lsSet("lf27-cur",expCur);render();return}
+  if(d.budget){editBudget(d.budget);return}
+  if(d.catren){catAction("ren",+d.catren);return}
+  if(d.catdel){catAction("del",+d.catdel);return}
   switch(d.act){
     case "close":closeSheet();break;
     case "editDay":openDayForm();break;
-    case "addExp":{const v=parseFloat(($("#gbpIn").value||"").replace(/,/g,""));if(!v){toast("先輸入英鎊金額");return}
-      S.expenses.push({id:uid(),ts:Date.now(),day:todayISO(),cat:expCat,gbp:v,note:$("#noteIn").value.trim()});save();render();toast(`已記下 £${fmtG(v)}＝NT$ ${fmt(toTWD(v))}`);break}
+    case "addExp":addExpense();break;
+    case "manageCats":openCatsForm();break;
+    case "addCat":catAction("add");break;
     case "syncNow":if(REPO){closeSheet();sync()}break;
     case "useRemote":resolveConflict(true);break;
     case "useLocal":resolveConflict(false);break;
@@ -1168,7 +1255,7 @@ document.addEventListener("click",async e=>{
   }
 });
 document.addEventListener("change",e=>{const id=e.target.dataset.chk;if(id&&S){const c=S.checklist.find(x=>x.id===id);c.done=e.target.checked;save();render()}});
-document.addEventListener("input",e=>{if(e.target.id==="gbpIn")updateConv()});
+document.addEventListener("input",e=>{if(e.target.id==="amtIn")updateConv()});
 $("#mask").onclick=closeSheet;
 $("#btnSettings").onclick=()=>S&&openSettings();
 addEventListener("online",()=>{renderSync();sync();fetchWeather();if(tab==="plan")render()});
