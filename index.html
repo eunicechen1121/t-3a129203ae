@@ -535,6 +535,10 @@ function normalize(d){
     st.budgets=b;st.total=Object.values(b).reduce((x,y)=>x+y,0);
     d.fixed=[];d.meta.moneyV9=true;needSave=true;
   }
+  if(!d.meta.moneyV10){
+    for(const e of d.expenses)if(e.item==null){e.item=e.note||"";e.note=""}
+    d.meta.moneyV10=true;needSave=true;
+  }
   const ids=new Set(d.itinerary.map(i=>i.id));
   for(const k of Object.keys(d.legs)){const [x,y]=k.split(">");if(!ids.has(x)||!ids.has(y))delete d.legs[k]}
   return d;
@@ -934,13 +938,14 @@ function viewMoney(){
     <div class="bigin"><span>${expCur==="GBP"?"£":"NT$"}</span><input id="amtIn" type="text" inputmode="decimal" placeholder="0" autocomplete="off"></div>
     <div class="muted" id="convOut">${expCur==="GBP"?`≈ NT$ 0（匯率 ${st.rate}＋手續費 ${st.fee}%）`:`≈ £0`}</div>
     <div class="cats" id="cats">${cs.map(c=>`<button data-cat="${esc(c)}" class="${c===expCat?"on":""}">${esc(c)}</button>`).join("")}</div>
-    <div class="row2"><input class="f" id="dayIn" type="date" value="${todayISO()}"><input class="f" id="noteIn" placeholder="備註（例：Pret 早餐）"></div>
+    <div class="row2"><input class="f" id="dayIn" type="date" value="${todayISO()}" style="flex:0 0 42%"><input class="f" id="itemIn" placeholder="項目（例：機票）"></div>
+    <input class="f" id="noteIn" placeholder="備註（選填，例：已含選位、當下的心情）">
     <button class="btn solid full" data-act="addExp">記下來</button>
   </div>
 
   <div class="sec">記帳紀錄</div>
   <div class="card">${exps.map(e=>{const p=e.day?dParts(e.day):null;return `<div class="exp" data-editexp="${e.id}">
-    <span class="dt">${p?`${p.m}/${p.d}`:"—"}</span><span class="c">${esc(e.cat)}</span><div class="n">${esc(e.note||"（無備註）")}</div>
+    <span class="dt">${p?`${p.m}/${p.d}`:"—"}</span><span class="c">${esc(e.cat)}</span><div class="n">${esc(e.item||"（未填項目）")}${e.note?`<div class="muted">${esc(e.note)}</div>`:""}</div>
     <div class="a">${fmtAmt(e)}${e.cur==="GBP"?`<small>NT$ ${fmt(twdOf(e))}</small>`:""}</div></div>`}).join("")||`<p class="muted" style="margin:0">還沒有紀錄。</p>`}
     ${exps.length?`<p class="hint">點一筆可以修改或刪除。共 ${exps.length} 筆，合計 NT$ ${fmt(spent)}。</p>`:""}</div>
   </main>`;
@@ -952,9 +957,9 @@ function updateConv(){
 function addExpense(){
   const v=parseFloat(($("#amtIn").value||"").replace(/,/g,""));if(!(v>0)){toast("先輸入金額");return}
   const amt=expCur==="GBP"?Math.round(v*100)/100:Math.round(v);
-  const e={id:uid(),ts:Date.now(),day:$("#dayIn").value||todayISO(),cat:expCat,cur:expCur,amt,note:$("#noteIn").value.trim()};
+  const e={id:uid(),ts:Date.now(),day:$("#dayIn").value||todayISO(),cat:expCat,cur:expCur,amt,item:$("#itemIn").value.trim(),note:$("#noteIn").value.trim()};
   e.twd=Math.round(expCur==="GBP"?amt*gbpRate():amt);
-  S.expenses.push(e);save();render();toast(`已記下 ${fmtAmt(e)}${expCur==="GBP"?`＝NT$ ${fmt(e.twd)}`:""}`);
+  S.expenses.push(e);save();render();toast(`已記下 ${e.item?e.item+" ":""}${fmtAmt(e)}${expCur==="GBP"?`＝NT$ ${fmt(e.twd)}`:""}`);
 }
 /* 編輯一筆：英鎊、台幣兩格互相即時換算；「記帳幣別」決定列表主要顯示哪一種 */
 function openExpForm(id){
@@ -967,14 +972,15 @@ function openExpForm(id){
     <p class="hint">輸入任一格，另一格會自動換算（匯率 ${S.settings.rate}＋手續費 ${S.settings.fee}%）。存的是台幣那格的金額。</p>
     <label>分類</label><select class="f" name="cat">${[...new Set([...cats(),e.cat])].map(c=>`<option ${c===e.cat?"selected":""}>${esc(c)}</option>`).join("")}</select>
     <label>日期</label><input class="f" name="day" type="date" value="${esc(e.day||"")}">
-    <label>備註</label><input class="f" name="note" value="${esc(e.note||"")}">
+    <label>項目</label><input class="f" name="item" value="${esc(e.item||"")}" placeholder="例：機票">
+    <label>備註</label><textarea class="f" name="note" rows="2" placeholder="例：已含選位、當下的心情">${esc(e.note||"")}</textarea>
     <div class="foot"><button type="button" class="btn danger" data-delexp="${e.id}">刪除</button><button type="button" class="btn ghost" data-act="close">取消</button><button class="btn solid" style="flex:1">儲存</button></div></form>`);
   const f=$("#expf"),num=v=>parseFloat(String(v).replace(/,/g,""));
   f.gbp.oninput=()=>{const v=num(f.gbp.value);f.twd.value=isNaN(v)?"":Math.round(v*k)};
   f.twd.oninput=()=>{const v=num(f.twd.value);f.gbp.value=isNaN(v)?"":(Math.round(v/k*100)/100)};
   f.onsubmit=ev=>{ev.preventDefault();const tw=num(f.twd.value),gb=num(f.gbp.value);if(!(tw>0)){toast("金額要大於 0");return}
     e.cur=f.cur.value;e.amt=e.cur==="GBP"?Math.round(gb*100)/100:Math.round(tw);e.twd=Math.round(tw);
-    e.cat=f.cat.value;e.day=f.day.value;e.note=f.note.value.trim();delete e.gbp;save();closeSheet();render();toast("已更新");};
+    e.cat=f.cat.value;e.day=f.day.value;e.item=f.item.value.trim();e.note=f.note.value.trim();delete e.gbp;save();closeSheet();render();toast("已更新");};
 }
 function editBudget(c){
   const st=S.settings,cur=c==="__total"?st.total:st.budgets[c];
