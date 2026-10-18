@@ -448,6 +448,30 @@ const PLACES_V16 = [
    hours:"週一–三、五 09:00–20:00；週四 09:00–21:00；週六 10:00–20:00；週日 12:00–18:00"}
 ];
 const CAT_NOTES_V16={吃:"💡 不知道要吃什麼的時候：Pret 連鎖店，旅館附近好幾間，三明治、可頌、湯都有。"};
+// 2026-10-19 橙給的 Google 地圖連結（資料讀自 Google 地圖）
+const PLACES_V17 = [
+  {name:"Tongue & Brisket",cat:"吃",query:"Tongue & Brisket 199 Wardour Street London",address:"199 Wardour Street, W1F 8JP",
+   desc:"鹹牛肉三明治專賣店，招牌是鹹牛肉和 Reuben 三明治。多個美食指南列為 Soho 平價三明治首選。Google 4.6（1,000 多則）。",
+   hours:"週一–五 08:30–20:00；週六 11:00–20:00；週日 11:00–18:30",web:"https://tongueandbrisket.com"},
+  {name:"Make Mine",cat:"吃",query:"Make Mine 86 Dean Street London",address:"86 Dean Street, W1D 3SR",
+   desc:"平價三明治店，有評論說是「Soho 最好吃的三明治」，適合快速午餐。Google 4.3（147 則）。",
+   hours:"週一–六 07:00–17:00；週日休息"},
+  {name:"It's Bagels Soho",cat:"甜點咖啡",query:"It's Bagels 8 D'Arblay Street London",address:"8 D'Arblay Street, W1F 8DP",
+   desc:"紐約式貝果，跟 B Bagel 是不同家，可以比較看看。Google 4.4（600 多則）。",
+   hours:"週一、二 08:30–16:00；週三–五 08:30–21:00；週六 09:00–17:00；週日 09:00–17:00",web:"https://itsbagels.com"},
+  {name:"Bleecker Burger Soho",cat:"吃",query:"Bleecker Burger 33 Old Compton Street London",address:"33 Old Compton Street, W1D 5JU",
+   desc:"倫敦有名的漢堡店，Google 4.7（2,800 多則）。開到很晚，看完戲也來得及。",
+   hours:"週一–四 11:00–23:30；週五、六 11:00–00:00；週日 11:00–22:30",web:"https://bleecker.co.uk"},
+  {name:"Costa Coffee（Great Marlborough St）",cat:"甜點咖啡",query:"Costa Coffee 14 Great Marlborough Street London",address:"14 Great Marlborough Street, W1F 7HP",
+   desc:"英國連鎖咖啡店。跟 Palladium 後台門在同一條街，排 stage door 前後很方便。",
+   hours:"週一–五 06:00–20:30；週六 07:00–20:30；週日 08:00–20:00",web:"https://costa.co.uk"},
+  {name:"Marugame Udon（Oxford Circus）",cat:"吃",query:"Marugame Udon 1-4 Argyll Street London",address:"1-4 Argyll Street, W1F 7TA",
+   desc:"丸龜製麵：現做烏龍麵，天婦羅自己挑，自助式點餐，平價又快。就在 Palladium 隔壁，看戲前吃很方便。Google 4.5（2,400 多則）。",
+   hours:"週日–二 11:00–21:30；週三–六 11:00–23:00",web:"https://marugame.co.uk"},
+  {name:"Burgeri",cat:"吃",query:"Burgeri 22 Great Marlborough Street London",address:"22 Great Marlborough Street, W1F 7HU",
+   desc:"漢堡店，跟 Palladium 後台門在同一條街。Google 4.0（3,900 多則）。",
+   hours:"週一–六 12:00–23:00；週日 12:00–22:00",web:"https://burgeri.shop"}
+];
 const NEW_TODOS_V4 = [
   ["採購","買 eSIM（確認英國能用、天數涵蓋 2/21–2/26）","2027-02-10"],
   ["採購","買旅平險（先查信用卡附帶的旅程取消／延誤保障）","2026-11-15"],
@@ -614,6 +638,10 @@ function normalize(d){
   if(!d.meta.placesV14){
     for(const x of PLACES_V14)if(!d.places.some(p=>p.name===x.name))d.places.push({id:uid(),note:"",price:"",web:"",...x});
     d.meta.placesV14=true;needSave=true;
+  }
+  if(!d.meta.placesV17){
+    for(const x of PLACES_V17)if(!d.places.some(p=>p.name===x.name))d.places.push({id:uid(),note:"",price:"",web:"",...x});
+    d.meta.placesV17=true;needSave=true;
   }
   if(!d.meta.placesV16){
     for(const x of PLACES_V16)if(!d.places.some(p=>p.name===x.name))d.places.push({id:uid(),note:"",price:"",web:"",...x});
