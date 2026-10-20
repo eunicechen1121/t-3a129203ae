@@ -1306,7 +1306,7 @@ const FORMS={
   shows:{title:"戲票",fields:[["title","劇名","text"],["date","日期","date"],["time","時間","time"],["venue","劇院","text"],["status","狀態","select",SHOW_STATUS.map(s=>[s,s])],["price","價格","text"],["note","備註","textarea"]]},
   places:{title:"地點",fields:[["name","名稱","text"],["cat","分類（住／劇院／吃／逛／交通…）","text"],["desc","簡介（這裡有什麼、推薦什麼）","textarea"],["hours","營業時間","text"],["price","消費區間","text"],["address","地址","text"],["web","官網（https://…）","text"],["query","地圖搜尋字","text"],["note","我的備註","textarea"]]},
   // where＝group 和 cat 合成一個選單：「出發前|購票」或「證件」
-  checklist:{title:"清單項目",fields:[["where","分類","select",[...TODO_CATS.map(c=>[TODO_GROUP+"|"+c,"出發前："+c]),...PACK_GROUPS.map(g=>[g,"行李："+g])]],["text","內容","text"],["due","截止日（選填，待辦用）","date"]]},
+  checklist:{title:"清單項目",fields:[["where","分類","select",[...TODO_CATS.map(c=>[TODO_GROUP+"|"+c,"出發前："+c]),...PACK_GROUPS.map(g=>[g,"行李："+g])]],["text","內容","text"],["due","截止日（選填）","date"]]},
   fixed:{title:"已付項目",fields:[["name","名稱","text"],["twd","台幣金額","number"]]}
 };
 function openSheet(html){$("#sheet").innerHTML=html;$("#sheet").classList.add("open");$("#mask").classList.add("open")}
@@ -1319,6 +1319,10 @@ function openForm(coll,id,group){
   if(coll==="itinerary"&&toMin(obj.time)>=1440)vals.time=fromMin(toMin(obj.time)-1440);
   if(coll==="checklist") vals.where=obj.group===TODO_GROUP?TODO_GROUP+"|"+(obj.cat||"其他"):obj.group;
   let fields=F.fields;
+  // 待辦和行李各用自己的分類，行李不需要截止日
+  const todo=coll==="checklist"&&obj.group===TODO_GROUP;
+  if(coll==="checklist")fields=todo?[["where","分類","select",TODO_CATS.map(c=>[TODO_GROUP+"|"+c,c])],F.fields[1],F.fields[2]]:[["where","分類","select",PACK_GROUPS.map(g=>[g,g])],F.fields[1]];
+  const title=coll==="checklist"?(todo?"待辦":"行李"):F.title;
   if(coll==="itinerary")fields=[["placeId","從地點選（選了會連結：地址、營業時間等以地點頁為準）","select",[["","—（不連結）"],...S.places.map(p=>[p.id,`${p.cat||"其他"}｜${p.name}`])]],...F.fields];
   const field=([k,l,t,opts])=>{const v=vals[k]??"";
     // 舊資料的值不在選項裡時保留它，避免一打開編輯就被改成第一個選項
@@ -1326,7 +1330,7 @@ function openForm(coll,id,group){
     if(t==="select") return `<label>${l}</label><select class="f" name="${k}">${opts.map(([ov,ol])=>`<option value="${esc(ov)}" ${ov==v?"selected":""}>${esc(ol)}</option>`).join("")}</select>`;
     if(t==="textarea") return `<label>${l}</label><textarea class="f" name="${k}" rows="3">${esc(v)}</textarea>`;
     return `<label>${l}</label><input class="f" name="${k}" type="${t==="number"?"text":t}" ${t==="number"?'inputmode="decimal"':""} value="${esc(v)}">`;};
-  openSheet(`<h3>${isNew?"新增":"編輯"}${F.title}</h3><form id="frm">${fields.map(field).join("")}
+  openSheet(`<h3>${isNew?"新增":"編輯"}${title}</h3><form id="frm">${fields.map(field).join("")}
     <div class="foot">${isNew?"":`<button type="button" class="btn danger" data-del="${coll}" data-id="${id}">刪除</button>`}
     <button type="button" class="btn ghost" data-act="close">取消</button><button type="submit" class="btn solid" style="flex:1">儲存</button></div></form>`);
   const before={stay:obj.stay,lock:obj.lock,loc:geoKey(obj),day:obj.day,time:obj.time};
