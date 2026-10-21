@@ -529,6 +529,11 @@ const PLACES_V20 = [
    desc:"義大利巧克力品牌，評論最常提到義式冰淇淋，推開心果口味。跟 Palladium 後台門在同一條街，開到晚上 11 點。Google 4.9（2,600 多則）。",
    hours:"每天 10:30–23:00",web:"https://uk.venchi.com"}
 ];
+const PLACES_V21 = [
+  {name:"Café in the Crypt",cat:"吃",query:"Café in the Crypt St Martin-in-the-Fields Trafalgar Square London",address:"St Martin-in-the-Fields, Trafalgar Square, WC2N 4JH",
+   desc:"St Martin-in-the-Fields 教堂地下墓室裡的自助式餐廳，在拱頂下、地上鋪著墓碑的空間用餐。就在特拉法加廣場、國家美術館旁邊，逛完美術館可以來。打烊得早，多數日子 17:00 就關。Google 4.2（2,700 多則）；2026/10/21 查 Google 地圖仍在營業。",
+   hours:"週一–三 11:00–17:00；週四 10:00–17:00；週五、六 10:00–19:00；週日 13:00–17:00",web:"https://stmartin-in-the-fields.org"}
+];
 const NEW_TODOS_V4 = [
   ["採購","買 eSIM（確認英國能用、天數涵蓋 2/21–2/26）","2027-02-10"],
   ["採購","買旅平險（先查信用卡附帶的旅程取消／延誤保障）","2026-11-15"],
@@ -707,6 +712,10 @@ function normalize(d){
     const M={抽籤中:"評估中",沒中:"評估中",放棄:"評估中",保底:"待買",中了:"待買"};
     for(const x of d.shows||[])if(M[x.status])x.status=M[x.status];
     d.meta.showStatusV18=true;needSave=true;
+  }
+  if(!d.meta.placesV21){
+    for(const x of PLACES_V21)if(!d.places.some(p=>p.name===x.name||(p.query&&p.query===x.query)))d.places.push({id:uid(),note:"",price:"",web:"",...x});
+    d.meta.placesV21=true;needSave=true;
   }
   if(!d.meta.placesV20){
     // 2026-10-21 從 Google 地圖清單加 18 間（橙挑的），資料讀自 Google 地圖
