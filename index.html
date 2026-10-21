@@ -100,9 +100,8 @@ main{padding:0 16px}
 .ticket .muted{color:#3d3832}
 .ticket .stub .dd{font-family:var(--chunky);font-weight:900;font-size:21px} .ticket .stub .tt{font-size:12px;font-weight:700}
 .status{display:inline-block;font-size:12px;font-weight:800;border-radius:999px;padding:1px 10px;margin-top:6px;border:2px solid var(--ink);background:#fff}
-.st-已買{background:var(--green);color:#fff} .st-抽籤中{background:var(--orange)}
-.st-中了{background:var(--red);color:#fff} .st-沒中,.st-放棄{background:#ddd;color:#666;border-color:#888}
-.st-保底{background:var(--blue)}
+.st-已買{background:var(--green);color:#fff} .st-評估中{background:var(--orange)}
+.st-待買{background:var(--red);color:#fff} .st-當日RUSH{background:var(--blue)}
 /* money */
 .conv{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
 .bigin{display:flex;align-items:center;gap:8px;background:#fff;border:2px solid var(--ink);border-radius:12px;padding:4px 12px}
@@ -330,7 +329,7 @@ const KINDS = {flight:"飛機",transit:"轉機",move:"交通",show:"看戲",food
 const STATUS = {booked:"✓ 已預約",todo:"待訂",none:"不用訂"};
 const TZS = ["台北","曼谷","倫敦"];
 const CATS = ["餐飲","交通","住宿","戲票","購物","其他"];   // 預設記帳分類，使用者可在 App 裡改
-const SHOW_STATUS = ["已買","抽籤中","保底","中了","沒中","放棄"];
+const SHOW_STATUS = ["已買","待買","評估中","當日RUSH"];
 const TODO_GROUP = "出發前";
 const PACK_GROUPS = ["證件","衣物","電子","盥洗","看戲用品","其他"];
 const TODO_CATS = ["購票","英國入境","採購","列印／PDF","交通住宿","其他"];
@@ -640,6 +639,11 @@ function normalize(d){
   if(!d.meta.placesV14){
     for(const x of PLACES_V14)if(!d.places.some(p=>p.name===x.name))d.places.push({id:uid(),note:"",price:"",web:"",...x});
     d.meta.placesV14=true;needSave=true;
+  }
+  if(!d.meta.showStatusV18){
+    const M={抽籤中:"評估中",沒中:"評估中",放棄:"評估中",保底:"待買",中了:"待買"};
+    for(const x of d.shows||[])if(M[x.status])x.status=M[x.status];
+    d.meta.showStatusV18=true;needSave=true;
   }
   if(!d.meta.placesV17){
     for(const x of PLACES_V17)if(!d.places.some(p=>p.name===x.name))d.places.push({id:uid(),note:"",price:"",web:"",...x});
@@ -1179,7 +1183,7 @@ function viewShows(){
         ${s.note?`<div class="no muted" style="margin-top:6px;white-space:pre-wrap">${esc(s.note)}</div>`:""}</div>
       <div class="stub"><div class="tt">週${p.w}</div><div class="dd">${p.m}/${p.d}</div><div class="tt">${esc(s.time)}</div></div>
     </div>`}).join("")}
-    <button class="add" data-add="shows">＋ 新增戲票</button><p class="hint">點票卡可以改狀態（中了／沒中／已買）。</p></main>`;
+    <button class="add" data-add="shows">＋ 新增戲票</button><p class="hint">點票卡可以改狀態（已買／待買／評估中／當日RUSH）。</p></main>`;
 }
 
 /* ---------- 地點 ---------- */
@@ -1313,7 +1317,7 @@ function openSheet(html){$("#sheet").innerHTML=html;$("#sheet").classList.add("o
 function closeSheet(){$("#sheet").classList.remove("open");$("#mask").classList.remove("open")}
 function openForm(coll,id,group){
   const F=FORMS[coll]; const isNew=!id;
-  const base={itinerary:{day,time:"",kind:"sight"},shows:{date:"2027-02-22",time:"19:30",status:"抽籤中"},places:{cat:"吃"},checklist:{group:group||TODO_GROUP,cat:(group||TODO_GROUP)===TODO_GROUP?"其他":""},fixed:{}}[coll];
+  const base={itinerary:{day,time:"",kind:"sight"},shows:{date:"2027-02-22",time:"19:30",status:"評估中"},places:{cat:"吃"},checklist:{group:group||TODO_GROUP,cat:(group||TODO_GROUP)===TODO_GROUP?"其他":""},fixed:{}}[coll];
   const obj=isNew?Object.assign({},base):S[coll].find(x=>x.id===id); if(!obj) return;
   const vals=Object.assign({},obj);
   if(coll==="itinerary"&&toMin(obj.time)>=1440)vals.time=fromMin(toMin(obj.time)-1440);
