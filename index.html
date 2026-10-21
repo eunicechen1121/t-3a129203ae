@@ -473,6 +473,62 @@ const PLACES_V17 = [
    desc:"漢堡店，跟 Palladium 後台門在同一條街。Google 4.0（3,900 多則）。",
    hours:"週一–六 12:00–23:00；週日 12:00–22:00",web:"https://burgeri.shop"}
 ];
+const PLACES_V20 = [
+  {name:"J Sheekey",cat:"吃",query:"J Sheekey 28-32 St Martin's Court London",address:"28-32 St Martin's Court, WC2N 4AL",
+   desc:"1890 年代開業的老牌海鮮餐廳，在劇院區小巷裡，牆上掛滿演員照片。評論常提到魚派、多佛比目魚。偏高價，建議先訂位。Google 4.5（2,700 多則）。",
+   hours:"週一–六 12:00–22:45；週日 12:00–22:00",web:"https://j-sheekey.co.uk"},
+  {name:"Dirty Bones Soho",cat:"吃",query:"Dirty Bones 14 Denman Street London",address:"14 Denman Street, W1D 7HN",
+   desc:"美式餐廳，評論常提到炸雞鬆餅、羊肉薯條，也有調酒。在 Piccadilly Circus 旁邊。Google 4.5（3,800 多則）。",
+   hours:"週一–五 12:00–23:00；週六 11:00–23:00；週日 11:00–22:00",web:"https://dirty-bones.com"},
+  {name:"Flat Iron Piccadilly",cat:"吃",query:"Flat Iron 21 Denman Street London",address:"21 Denman Street, W1D 7HS",
+   desc:"平價牛排連鎖的 Piccadilly 分店，跟 Soho 店同一家。評論說物超所值，餐後送爆米花，配菜推奶油菠菜。Google 4.9（2,400 多則）。",
+   hours:"週日–二 12:00–22:00；週三、四 12:00–23:00；週五、六 12:00–23:30",web:"https://flatironsteak.co.uk"},
+  {name:"Flat Iron Covent Garden",cat:"吃",query:"Flat Iron 17-18 Henrietta Street London",address:"17-18 Henrietta Street, WC2E 8QH",
+   desc:"平價牛排連鎖的 Covent Garden 分店。評論提到常要排隊；推松露起司通心粉、餐後甜筒。Google 4.6（11,000 多則）。",
+   hours:"週日–二 11:30–22:30；週三、四 11:30–23:00；週五、六 11:30–23:30",web:"https://flatironsteak.co.uk"},
+  {name:"Mother Mash Carnaby",cat:"吃",query:"Mother Mash 26 Ganton Street London",address:"26 Ganton Street, W1F 7QZ",
+   desc:"英國家常菜：派或香腸配馬鈴薯泥，淋洋蔥肉汁，自己選組合。在 Carnaby 一帶。Google 4.6（4,300 多則）。",
+   hours:"每天 12:00–22:00",web:"https://mothermash.co.uk"},
+  {name:"The Breakfast Club Soho",cat:"吃",query:"The Breakfast Club 33 D'Arblay Street London",address:"33 D'Arblay Street, W1F 8EU",
+   desc:"人氣早餐店，鬆餅、英式早餐、班尼迪克蛋。評論常提到要排隊，早點去。Google 4.4（5,200 多則）。",
+   hours:"週一–五 07:30–15:00；週六、日 07:30–17:00",web:"https://thebreakfastclubcafes.com"},
+  {name:"KOZZEE Cafe Soho",cat:"吃",query:"KOZZEE Cafe 193 Wardour Street London",address:"193 Wardour Street, W1F 8ZF",
+   desc:"早午餐店，英式早餐、酪梨吐司、班尼迪克蛋，有純素選擇。Google 4.7（11,000 多則）。",
+   hours:"週一–三 07:30–17:30；週四、五 07:30–18:30；週六 08:00–19:00；週日 08:00–18:30",web:"https://kozzee.co.uk"},
+  {name:"Pizza Pilgrims Carnaby",cat:"吃",query:"Pizza Pilgrims 11 Kingly Street London",address:"11 Kingly Street, W1B 5PW",
+   desc:"拿坡里披薩，評論推瑪格麗特、檸檬酒。在 Kingly Court 旁邊。Google 4.8（16,000 多則）。",
+   hours:"週一–六 11:30–23:00；週日 11:30–21:00",web:"https://pizzapilgrims.co.uk"},
+  {name:"Pret A Manger（Regent Place）",cat:"吃",query:"Pret A Manger 4 Regent Place London",address:"4 Regent Place, W1B 5EA",
+   desc:"清單裡存的這間 Pret，在 Regent Street 和 Piccadilly Circus 之間。三明治、湯、咖啡，有廁所。Google 4.1（800 多則）。",
+   hours:"週一–五 06:00–20:00；週六 06:30–20:00；週日 08:00–19:30",web:"https://pret.co.uk"},
+  {name:"Crumbs & Doilies",cat:"甜點咖啡",query:"Crumbs & Doilies 1 Kingly Court London",address:"1 Kingly Court, W1B 5PW",
+   desc:"杯子蛋糕店，在 Kingly Court 裡，評論推焦糖、Biscoff 口味。Google 4.5（1,000 多則）。",
+   hours:"週一–四 11:00–18:00；週五、六 11:00–19:00；週日 12:00–18:00",web:"https://crumbsanddoilies.co.uk"},
+  {name:"GAIL's Bakery Soho",cat:"甜點咖啡",query:"GAIL's Bakery 128 Wardour Street London",address:"128 Wardour Street, W1F 8ZL",
+   desc:"倫敦連鎖麵包店，評論推司康、肉桂捲。早上 7 點前就開，適合買早餐。Google 4.2（1,000 多則）。",
+   hours:"週一–四 06:45–19:00；週五 07:00–19:00；週六 07:30–19:00；週日 07:30–17:00",web:"https://gails.com"},
+  {name:"Sourdough Sophia - Covent Garden",cat:"甜點咖啡",query:"Sourdough Sophia 16 Neal's Yard London",address:"16 Neal's Yard, WC2H 9DP",
+   desc:"Neal's Yard 裡新開的麵包店分店，評論推杏仁可頌、餅乾。評論數還少（40 則），Google 4.8。",
+   hours:"每天 08:00–18:00",web:"https://sourdoughsophia.co.uk"},
+  {name:"B Bagel New Oxford Street",cat:"甜點咖啡",query:"B Bagel 52 New Oxford Street London",address:"52 New Oxford Street, WC1A 1ES",
+   desc:"B Bagel 的另一間分店（Soho 店也在地點頁），靠近大英博物館。有純素選擇。Google 4.8（300 多則）。",
+   hours:"週一–五 07:30–19:00；週六 08:00–19:00；週日 08:00–17:00",web:"https://bbagel.co.uk"},
+  {name:"L'ETO Wardour Street",cat:"甜點咖啡",query:"L'ETO 155 Wardour Street London",address:"155 Wardour Street, W1F 8WG",
+   desc:"蛋糕咖啡店，招牌是牛奶蛋糕（tres leches），也推開心果蛋糕、蜂蜜蛋糕。開到晚上 11 點，看完戲也能去。Google 4.6（13,000 多則）。",
+   hours:"每天 09:00–23:00",web:"https://letocaffe.co.uk"},
+  {name:"Blank Street Coffee",cat:"甜點咖啡",query:"Blank Street Coffee 22 Noel Street London",address:"22 Noel Street, W1F 8GS",
+   desc:"連鎖咖啡店，評論推藍莓、白巧克力口味的飲料。Google 4.7（1,200 多則）。",
+   hours:"週一–五 06:30–20:00；週六、日 07:00–20:00",web:"https://blankstreet.com"},
+  {name:"Toi & Moi Cafe",cat:"甜點咖啡",query:"Toi & Moi Cafe 38 Berwick Street London",address:"38 Berwick Street, W1F 8RT",
+   desc:"早午餐咖啡店，評論最常提到鬆餅。有評論提醒會加服務費。Google 4.5（3,800 多則）。",
+   hours:"週一–五 08:00–19:00；週六、日 08:00–19:30",web:"https://toimoicafe.co.uk"},
+  {name:"Crème",cat:"甜點咖啡",query:"Creme 4 D'Arblay Street London",address:"4 D'Arblay Street, W1F 8DJ",
+   desc:"餅乾甜點店，評論推白巧克力、牛奶巧克力餅乾。Google 4.3（2,100 多則）。",
+   hours:"週日–四 10:00–21:00；週五、六 10:00–22:00",web:"https://cremelondon.com"},
+  {name:"Venchi（Great Marlborough St）",cat:"甜點咖啡",query:"Venchi 32 Great Marlborough Street London",address:"32 Great Marlborough Street, W1F 7JB",
+   desc:"義大利巧克力品牌，評論最常提到義式冰淇淋，推開心果口味。跟 Palladium 後台門在同一條街，開到晚上 11 點。Google 4.9（2,600 多則）。",
+   hours:"每天 10:30–23:00",web:"https://uk.venchi.com"}
+];
 const NEW_TODOS_V4 = [
   ["採購","買 eSIM（確認英國能用、天數涵蓋 2/21–2/26）","2027-02-10"],
   ["採購","買旅平險（先查信用卡附帶的旅程取消／延誤保障）","2026-11-15"],
@@ -651,6 +707,11 @@ function normalize(d){
     const M={抽籤中:"評估中",沒中:"評估中",放棄:"評估中",保底:"待買",中了:"待買"};
     for(const x of d.shows||[])if(M[x.status])x.status=M[x.status];
     d.meta.showStatusV18=true;needSave=true;
+  }
+  if(!d.meta.placesV20){
+    // 2026-10-21 從 Google 地圖清單加 18 間（橙挑的），資料讀自 Google 地圖
+    for(const x of PLACES_V20)if(!d.places.some(p=>p.name===x.name||(p.query&&p.query===x.query)))d.places.push({id:uid(),note:"",price:"",web:"",...x});
+    d.meta.placesV20=true;needSave=true;
   }
   if(!d.meta.placesV17){
     for(const x of PLACES_V17)if(!d.places.some(p=>p.name===x.name))d.places.push({id:uid(),note:"",price:"",web:"",...x});
