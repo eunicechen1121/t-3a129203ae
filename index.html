@@ -1443,14 +1443,17 @@ function openForm(coll,id,group){
     f.placeId.onchange=()=>{const p=S.places.find(x=>x.id===f.placeId.value);if(!p)return;
       if(isNew||!f.title.value.trim())f.title.value=p.name;if(isNew){f.kind.value=PLACE_KIND[p.cat]||f.kind.value;f.stay.value=STAY_DEFAULT[f.kind.value]||60;upd()}};
   }
-  if(coll==="places")before.pq=(obj.query||"")+"|"+(obj.address||"");
+  if(coll==="places"){before.pq=(obj.query||"")+"|"+(obj.address||"");before.keys=[obj.name,obj.query,obj.address]}
+  if(coll==="itinerary")Object.assign(before,{pid:obj.placeId,place:obj.place,address:obj.address,hotel:obj.kind==="rest"&&obj.status==="booked"});
   $("#frm").onsubmit=e=>{e.preventDefault();const fd=new FormData(e.target);
     fields.forEach(([k,,t])=>{let v=fd.get(k)??"";if(t==="number")v=parseFloat(String(v).replace(/,/g,""))||0;obj[k]=v});
     if(coll==="itinerary"&&!obj.placeId)delete obj.placeId;
-    // 地點的位置改了：連結它的行程，交通要重算
-    if(coll==="places"&&!isNew&&(obj.query||"")+"|"+(obj.address||"")!==before.pq){
-      const ids=new Set(S.itinerary.filter(i=>i.placeId===obj.id).map(i=>i.id));
-      for(const [k,L] of Object.entries(S.legs))if(k.split(">").some(x=>ids.has(x)))delete L.r;
+    let synced=0;
+    // 地點的名稱或位置改了：連結它的行程、還有只寫著舊名稱／舊地址的行程，都換到新地點，交通重算（例：換住宿）
+    if(coll==="places"&&!isNew&&((obj.query||"")+"|"+(obj.address||"")!==before.pq||obj.name!==before.keys[0])){
+      const keys=keySet(before.keys);
+      synced=relinkItems(i=>i.placeId===obj.id||strHit(i,keys),i=>{
+        i.placeId=obj.id;i.place=obj.query||obj.name;if(i.address&&keys.has(i.address.trim()))i.address=""});
     }
     if(coll==="itinerary"&&toMin(before.time)>=1440&&obj.time&&obj.time<"06:00")obj.time=fromMin(toMin(obj.time)+1440);
     if(coll==="checklist"){const [g,c]=obj.where.split("|");obj.group=g;obj.cat=c||"";delete obj.where}
@@ -1461,9 +1464,26 @@ function openForm(coll,id,group){
       if(!isNew&&obj.autoAnchor)delete obj.autoAnchor;
       // 地點改了，跟它相關的交通要重算
       if(geoKey(obj)!==before.loc)for(const [k,L] of Object.entries(S.legs))if(k.split(">").includes(obj.id))delete L.r,delete L.mode;
+      // 換住宿：改了「已預約」住宿那筆的地點，其他指向舊旅館的行程（從旅館出發／回到旅館、退房…）一起換過去
+      const isHotel=obj.kind==="rest"&&obj.status==="booked";
+      if(!isNew&&(before.hotel||isHotel)&&(geoKey(obj)!==before.loc||(obj.placeId||"")!==(before.pid||""))){
+        const op=before.pid&&S.places.find(p=>p.id===before.pid);
+        const keys=keySet([before.place,before.address,...(op?[op.name,op.query,op.address]:[])]);
+        synced=relinkItems(i=>(before.pid&&i.placeId===before.pid)||strHit(i,keys),i=>{
+          if(obj.placeId)i.placeId=obj.placeId;else delete i.placeId;i.place=obj.place||"";i.address=obj.address||""},obj.id);
+      }
       if(!isNew&&(+obj.stay!==+before.stay||obj.lock!==before.lock))runRecalc(itemsOfDay(obj.day));
     }
-    save();closeSheet();render();toast("已儲存");};
+    save();closeSheet();render();toast(synced?`已儲存，相關的 ${synced} 筆行程也一起更新了`:"已儲存");};
+}
+// 換住宿用：找出指向舊地點的行程，換到新地點，相關交通重算
+const keySet=a=>new Set(a.filter(Boolean).map(x=>String(x).trim()).filter(Boolean));
+const strHit=(i,keys)=>!i.placeId&&[i.place,i.address].some(v=>v&&keys.has(String(v).trim()));
+function relinkItems(match,apply,skipId){
+  const ids=new Set();
+  for(const i of S.itinerary){if(i.id===skipId||!match(i))continue;apply(i);ids.add(i.id)}
+  for(const [k,L] of Object.entries(S.legs))if(k.split(">").some(x=>ids.has(x)))delete L.r;
+  return ids.size;
 }
 function openDayForm(){
   const p=dParts(day);
