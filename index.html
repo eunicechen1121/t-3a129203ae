@@ -111,6 +111,20 @@ main{padding:0 16px}
 .cats{display:flex;gap:6px;flex-wrap:wrap}
 .cats button{border:2px solid var(--ink);background:#fff;border-radius:999px;padding:5px 12px;font-size:14px;font-weight:700}
 .cats button.on{background:var(--yellow);box-shadow:2px 2px 0 var(--ink)}
+.pview{display:flex;margin:10px 0 6px;border:2px solid var(--ink);border-radius:999px;overflow:hidden;width:max-content}
+.pview button{border:0;background:#fff;padding:6px 16px;font-weight:800;font-size:14px}
+.pview button.on{background:var(--ink);color:var(--paper)}
+.mcats button{display:inline-flex;align-items:center;gap:5px}
+.mcats .dot{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--ink);display:inline-block}
+.mcats button:not(.on){opacity:.45}
+#pmap{height:62vh;min-height:320px;border:2px solid var(--ink);border-radius:14px;margin-top:8px;box-shadow:var(--shadow);background:#e8e2d4;z-index:0}
+.mrow{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:14px;font-weight:700}
+.mrow select{flex:1;border:2px solid var(--ink);border-radius:10px;padding:6px 8px;background:#fff;font:inherit}
+.mpin{width:16px;height:16px;border-radius:50%;border:2px solid #1d1b18;box-shadow:1px 1px 0 #1d1b18}
+.mstar{font-size:24px;line-height:24px;text-align:center;text-shadow:0 0 3px #fff,0 0 3px #fff}
+.mnum{width:20px;height:20px;border-radius:50%;background:#1d1b18;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+.mpop b{font-size:15px}.mpop .muted{font-size:12px}.mpop .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.mpop .chip{font-size:12px;padding:3px 9px}
 .row2{display:flex;gap:8px}
 .row2>*{flex:1}
 input.f,select.f,textarea.f{width:100%;background:#fff;border:2px solid var(--ink);border-radius:10px;padding:10px 12px;font-size:16px;outline:0;-webkit-appearance:none;appearance:none}
@@ -960,9 +974,19 @@ function adjustAnchors(d){
 // 用中文名稱查會跑到台灣（例：「國家美術館」），所以只在倫敦範圍內找，並依序試幾個搜尋字
 const LDN_BBOX="-0.56,51.28,0.31,51.70";
 async function photon(q){
-  const j=await (await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1&lat=51.51&lon=-0.13&bbox=${LDN_BBOX}`)).json();
-  const f=j.features&&j.features[0];if(!f)return null;
-  const [lon,lat]=f.geometry.coordinates;return [+lat.toFixed(5),+lon.toFixed(5)];
+  try{
+    const j=await (await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1&lat=51.51&lon=-0.13&bbox=${LDN_BBOX}`)).json();
+    const f=j.features&&j.features[0];if(f){const [lon,lat]=f.geometry.coordinates;return [+lat.toFixed(5),+lon.toFixed(5)]}
+  }catch(_){}
+  return nominatim(q);   // Photon 連不上或找不到時，改用 OSM Nominatim（每秒最多 1 次）
+}
+let nomiLast=0;
+async function nominatim(q){
+  const wait=nomiLast+1100-Date.now();if(wait>0)await new Promise(r=>setTimeout(r,wait));nomiLast=Date.now();
+  try{
+    const j=await (await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&bounded=1&viewbox=-0.56,51.70,0.31,51.28&q=${encodeURIComponent(q)}`)).json();
+    const f=j&&j[0];return f?[+(+f.lat).toFixed(5),+(+f.lon).toFixed(5)]:null;
+  }catch(e){throw e}   // 兩邊都連不上就丟錯，不要把「找不到」記進快取
 }
 // 行程的地點對到「地點」頁同名的項目時，用它的英文搜尋字
 function placeMatch(i){
@@ -987,7 +1011,7 @@ const mapQ=i=>{const lp=linkedPlace(i);return lp?(lp.address||lp.query||lp.name)
 async function geocodeItem(i){
   const key=geoKey(i),g=S.geo[key];if(g&&g.v)return g.v;
   let hit=null;for(const c of geoCandidates(i)){const v=await photon(c.q);if(v){hit={v,q:c.q,src:c.src};break}}
-  S.geo[key]=hit||{v:null};return hit?hit.v:null;
+  S.geo[key]=hit||{v:null,t:Date.now()};return hit?hit.v:null;
 }
 async function tfl(a,b,mode){
   const m={walking:"walking",transit:"tube,bus,dlr,overground,elizabeth-line,national-rail,walking",bicycling:"cycle"}[mode];
@@ -1318,11 +1342,75 @@ function openScheduleForm(pid){
       stay:parseInt(f.stay.value)||STAY_DEFAULT[kind]||60,lock:kind==="show"?"1":"",placeId:p.id};
     S.itinerary.push(it);save();closeSheet();render();const x=dParts(it.day);toast(`已排進 ${x.m}/${x.d} ${it.time}`);};
 }
+/* ---------- 地點地圖 ----------
+   Leaflet＋OpenStreetMap 底圖（要網路）；座標沿用交通用的 Photon 定位結果 */
+let placeView=lsGet("lf27-pview")==="map"?"map":"list",mapDay="",pmap=null;
+const mapHide=new Set(JSON.parse(lsGet("lf27-maphide")||"[]"));
+const CAT_COLOR={吃:"#f39a2b",甜點咖啡:"#f191b6",逛:"#3d8a3a",劇院:"#e64e2e",超市:"#5aaee3",交通:"#9a9a9a",住:"#f2e45c"};
+const catColor=c=>CAT_COLOR[c]||"#8b6fd6";
+function loadLeaflet(){
+  if(window.L)return Promise.resolve();
+  if(loadLeaflet.p)return loadLeaflet.p;
+  return loadLeaflet.p=new Promise((ok,bad)=>{
+    const css=document.createElement("link");css.rel="stylesheet";css.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";document.head.appendChild(css);
+    const js=document.createElement("script");js.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";js.onload=ok;js.onerror=()=>{loadLeaflet.p=null;bad()};document.head.appendChild(js);
+  });
+}
+const placeGeo=p=>{const g=S.geo[geoKey({placeId:p.id})];return g&&g.v};
+function placePopup(p){
+  const sd=schedOf(p),q=p.query||p.address||p.name;
+  return `<div class="mpop"><b>${esc(p.name)}</b><div class="muted">${esc(p.cat||"其他")}・${sd.length?"已排 "+sd.map(d=>{const x=dParts(d);return x.m+"/"+x.d}).join("、"):"還沒排"}</div>
+    ${p.hours?`<div>🕒 ${esc(p.hours)}</div>`:""}${p.price?`<div>💷 ${esc(p.price)}</div>`:""}
+    ${(()=>{const g=S.geo[geoKey({placeId:p.id})];return g&&g.q?`<div class="muted">📍 依「${esc(g.q)}」定位；位置不對就到清單補英文地址</div>`:""})()}
+    <div class="acts"><button class="chip" data-goplace="${p.id}">查看</button><button class="chip" data-schedule="${p.id}">＋ 排進行程</button><a class="chip grn" href="${mapUrl(q)}" target="_blank" rel="noopener">Google Maps</a></div></div>`;
+}
+async function initPlaceMap(){
+  const el=$("#pmap"),msg=$("#pmapmsg");if(!el)return;
+  if(!navigator.onLine){el.innerHTML=`<div class="mapoff" style="padding:24px">離線中：地圖要有網路才看得到</div>`;return}
+  try{await loadLeaflet()}catch(_){if(msg)msg.textContent="地圖元件載入失敗，請確認網路後重開";return}
+  if(!document.body.contains(el))return;
+  if(pmap){try{pmap.remove()}catch(_){}}
+  const map=pmap=L.map(el,{zoomControl:true}).setView([51.512,-0.133],15);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap contributors"}).addTo(map);
+  const ok=p=>!mapHide.has(p.cat||"其他")&&(placeFilter==="todo"?!schedOf(p).length:placeFilter==="done"?schedOf(p).length>0:true);
+  const list=S.places.filter(ok),pts=[];
+  const add=p=>{const v=placeGeo(p);if(!v)return false;
+    const icon=(p.cat==="住")?L.divIcon({className:"",html:`<div class="mstar">⭐</div>`,iconSize:[24,24],iconAnchor:[12,12]})
+      :L.divIcon({className:"",html:`<div class="mpin" style="background:${catColor(p.cat||"其他")}"></div>`,iconSize:[16,16],iconAnchor:[8,8]});
+    L.marker(v,{icon,zIndexOffset:p.cat==="住"?1000:0}).addTo(map).bindPopup(placePopup(p),{maxWidth:240});
+    if(p.cat!=="交通"&&Math.hypot((v[0]-51.51)*111,(v[1]+0.13)*69)<6)pts.push(v);   // 機場等遠處的點不拉遠畫面
+    return true};
+  const missing=list.filter(p=>!add(p));
+  // 路線：那天的行程依順序連起來
+  let route=[];
+  if(mapDay){
+    const items=itemsOfDay(mapDay);let k=0;
+    for(const it of items)if(locOf(it)&&!S.geo[geoKey(it)]){try{await geocodeItem(it)}catch(_){}}
+    if(pmap!==map)return;
+    for(const it of items){const g=S.geo[geoKey(it)];if(!(g&&g.v))continue;k++;route.push(g.v);
+      L.marker(g.v,{icon:L.divIcon({className:"",html:`<div class="mnum">${k}</div>`,iconSize:[20,20],iconAnchor:[10,10]}),zIndexOffset:2000}).addTo(map)
+        .bindPopup(`<div class="mpop"><b>${k}. ${esc(it.time||"")} ${esc(it.title)}</b></div>`);}
+    if(route.length>1)L.polyline(route,{color:"#1d1b18",weight:3,dashArray:"6 6"}).addTo(map);
+  }
+  const fit=()=>{const b=route.length?route:pts;if(b.length)map.fitBounds(b,{padding:[30,30],maxZoom:16})};fit();
+  const lost=()=>missing.filter(p=>{const g=S.geo[geoKey({placeId:p.id})];return g&&!g.v});
+  const say=(done)=>{if(!msg)return;const l=lost(),busy=missing.length-l.length;
+    msg.textContent=`地圖上 ${pts.length} 個地點`+(busy&&!done?`，還有 ${busy} 個定位中（第一次比較慢，之後會記住）`:"")+(l.length?`；找不到位置：${l.map(p=>p.name).join("、")}（到清單補英文地址）`:"")+(mapDay&&!route.length?"；這天的行程還沒有定位":"")+"。地圖要有網路。"};say();
+  // 沒座標的地點補定位（和交通共用結果），一個一個來
+  for(const p of [...missing]){if(pmap!==map)return;{const g=S.geo[geoKey({placeId:p.id})];if(g&&(g.v||(g.t&&Date.now()-g.t<6*36e5)))continue}try{await geocodeItem({placeId:p.id})}catch(_){}if(add(p))missing.splice(missing.indexOf(p),1);say()}
+  save();say(true);
+  if(!route.length)fit();
+}
 function viewPlaces(){
   const ok=p=>placeFilter==="todo"?!schedOf(p).length:placeFilter==="done"?schedOf(p).length>0:true;
   const list=S.places.filter(ok),groups=[...new Set(list.map(p=>p.cat||"其他"))];
   const n=f=>S.places.filter(p=>f==="todo"?!schedOf(p).length:f==="done"?schedOf(p).length>0:true).length;
-  return `<main><div class="cats" style="margin:8px 0 4px">${[["","全部"],["todo","還沒排"],["done","已排"]].map(([v,l])=>`<button data-pfilter="${v}" class="${placeFilter===v?"on":""}">${l} ${n(v)}</button>`).join("")}</div>
+  const pv=`<div class="pview">${[["list","☰ 清單"],["map","🗺 地圖"]].map(([v,l])=>`<button data-pview="${v}" class="${placeView===v?"on":""}">${l}</button>`).join("")}</div>`;
+  if(placeView==="map")return `<main>${pv}<div class="cats" style="margin:4px 0">${[["","全部"],["todo","還沒排"],["done","已排"]].map(([v,l])=>`<button data-pfilter="${v}" class="${placeFilter===v?"on":""}">${l} ${n(v)}</button>`).join("")}</div>
+    <div class="cats mcats">${[...new Set(S.places.map(p=>p.cat||"其他"))].map(c=>`<button data-mcat="${esc(c)}" class="${mapHide.has(c)?"":"on"}"><span class="dot" style="background:${catColor(c)}"></span>${esc(c)}</button>`).join("")}</div>
+    <div class="mrow">路線<select id="mday"><option value="">不顯示</option>${DAYS.map(d=>{const x=dParts(d);return `<option value="${d}" ${mapDay===d?"selected":""}>${x.m}/${x.d}（${x.w}）的行程</option>`}).join("")}</select></div>
+    <div id="pmap"></div><p class="hint" id="pmapmsg">地圖要有網路。點圖釘看營業時間、價格，可以直接排進行程。</p></main>`;
+  return `<main>${pv}<div class="cats" style="margin:8px 0 4px">${[["","全部"],["todo","還沒排"],["done","已排"]].map(([v,l])=>`<button data-pfilter="${v}" class="${placeFilter===v?"on":""}">${l} ${n(v)}</button>`).join("")}</div>
     ${groups.map(g=>`<div class="sec">${esc(g)}<button class="x" data-catnote="${esc(g)}" aria-label="分類註解" style="margin-left:auto;font-size:14px">✎</button></div>${(S.catNotes||{})[g]?`<p class="catnote">${esc(S.catNotes[g])}</p>`:""}<div class="rows">${list.filter(p=>(p.cat||"其他")===g).map(placeRow).join("")}</div>`).join("")||`<p class="muted">沒有符合的地點。</p>`}
     <button class="add" data-add="places" style="margin-top:16px">＋ 新增地點</button>
     <p class="hint">內嵌地圖要有網路；離線時請先在 Google Maps 下載倫敦離線地圖。簡介是 2026/10 查的，出發前再確認。</p></main>`;
@@ -1551,7 +1639,7 @@ document.addEventListener("click",async e=>{
     if(v.legshow){L.hidden=false}
     adjustAnchors(day);save();render();if(v.legshow)ensureLegs(day);return;
   }
-  const t=e.target.closest("[data-tab],[data-day],[data-add],[data-edit],[data-del],[data-act],[data-cat],[data-delexp],[data-editexp],[data-toggle],[data-cur],[data-budget],[data-catren],[data-catdel],[data-expf],[data-goplace],[data-schedule],[data-pfilter],[data-catnote]");
+  const t=e.target.closest("[data-tab],[data-day],[data-add],[data-edit],[data-del],[data-act],[data-cat],[data-delexp],[data-editexp],[data-toggle],[data-cur],[data-budget],[data-catren],[data-catdel],[data-expf],[data-goplace],[data-schedule],[data-pfilter],[data-catnote],[data-pview],[data-mcat]");
   if(!t||!S&&!["syncNow"].includes(t.dataset.act)) return;
   const d=t.dataset;
   if(d.tab){tab=d.tab;lsSet("lf27-tab",tab);render();scrollTo(0,0);return}
@@ -1563,11 +1651,13 @@ document.addEventListener("click",async e=>{
     if(d.del==="places"){const p=S.places.find(x=>x.id===d.id);for(const i of S.itinerary)if(i.placeId===d.id){
       for(const k of ["address","hours","price","web"])if(!i[k]&&p[k])i[k]=p[k];if(!i.place)i.place=p.query||p.name;delete i.placeId}}
     S[d.del]=S[d.del].filter(x=>x.id!==d.id);save();closeSheet();render();toast("已刪除")}return}
-  if(d.goplace){tab="places";lsSet("lf27-tab",tab);placeFilter="";openRows.add(d.goplace);render();const el=document.querySelector(`[data-pid="${d.goplace}"]`);el&&el.scrollIntoView({block:"center"});return}
+  if(d.goplace){if(pmap){try{pmap.closePopup()}catch(_){}}placeView="list";lsSet("lf27-pview",placeView);tab="places";lsSet("lf27-tab",tab);placeFilter="";openRows.add(d.goplace);render();const el=document.querySelector(`[data-pid="${d.goplace}"]`);el&&el.scrollIntoView({block:"center"});return}
   if(d.schedule){openScheduleForm(d.schedule);return}
   if(d.catnote){S.catNotes=S.catNotes||{};const x=prompt(`「${d.catnote}」分類的註解（留空＝刪除）`,S.catNotes[d.catnote]||"");if(x===null)return;
     if(x.trim())S.catNotes[d.catnote]=x.trim();else delete S.catNotes[d.catnote];save();render();return}
   if(d.pfilter!==undefined){placeFilter=d.pfilter;lsSet("lf27-placefilter",placeFilter);render();return}
+  if(d.pview){placeView=d.pview;lsSet("lf27-pview",placeView);render();return}
+  if(d.mcat!==undefined){mapHide.has(d.mcat)?mapHide.delete(d.mcat):mapHide.add(d.mcat);lsSet("lf27-maphide",JSON.stringify([...mapHide]));render();return}
   if(d.cat){expCat=d.cat;document.querySelectorAll("#cats button").forEach(b=>b.classList.toggle("on",b.dataset.cat===expCat));return}
   if(d.delexp){if(confirm("刪除這筆記帳？")){S.expenses=S.expenses.filter(x=>x.id!==d.delexp);save();closeSheet();render()}return}
   if(d.editexp){openExpForm(d.editexp);return}
@@ -1608,6 +1698,7 @@ function render(){
   if(needSave){needSave=false;save()}
   renderTabs();renderCountdown();renderBanner();renderSync();
   $("#view").innerHTML={plan:viewPlan,money:viewMoney,shows:viewShows,places:viewPlaces,list:viewList}[tab]();
+  if(tab==="places"&&placeView==="map"){setTimeout(initPlaceMap,0);const sel=$("#mday");if(sel)sel.onchange=()=>{mapDay=sel.value;initPlaceMap()}}
   if(tab==="plan"){const on=document.querySelector(".date.on"),st=$("#dates");if(on&&st)st.scrollLeft=on.offsetLeft-(st.clientWidth-on.clientWidth)/2;ensureLegs(day)}
 }
 boot().then(fetchWeather);
