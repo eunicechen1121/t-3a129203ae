@@ -726,6 +726,14 @@ function normalize(d){
         note:"29 Shaftesbury Ave，走到 Palladium 約 10 分。\n約 2 小時 30 分含中場，約 17:00 散場；晚上 19:30 是 Falsettos ④。\nTodayTix 每日抽籤 £30（10:00 開放）。"});
     d.meta.hadesV19=true;needSave=true;
   }
+  if(!d.meta.hadesV22){
+    // 2026-10-23 Hadestown 排進 2/25 行程（待訂，日場 14:30 固定）
+    if(!d.itinerary.some(i=>i.day==="2027-02-25"&&/Hadestown/i.test(i.title)))
+      d.itinerary.push({id:uid(),day:"2027-02-25",time:"14:30",tz:"",kind:"show",title:"Hadestown",status:"todo",lock:"1",stay:150,
+        place:"Lyric Theatre London",address:"29 Shaftesbury Ave, London W1D 7ES",hours:"",price:"£30–78",web:"",
+        note:"TodayTix 每日抽籤 £30（10:00 開放）。\n約 17:00 散場；晚上 19:30 是 Falsettos ④，走到 Palladium 約 10 分。"});
+    d.meta.hadesV22=true;needSave=true;
+  }
   if(!d.meta.showStatusV18){
     const M={抽籤中:"評估中",沒中:"評估中",放棄:"評估中",保底:"待買",中了:"待買"};
     for(const x of d.shows||[])if(M[x.status])x.status=M[x.status];
