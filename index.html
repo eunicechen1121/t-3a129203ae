@@ -550,6 +550,11 @@ const PLACES_V21 = [
    desc:"St Martin-in-the-Fields 教堂地下墓室裡的自助式餐廳，在拱頂下、地上鋪著墓碑的空間用餐。就在特拉法加廣場、國家美術館旁邊，逛完美術館可以來。打烊得早，多數日子 17:00 就關。Google 4.2（2,700 多則）；2026/10/21 查 Google 地圖仍在營業。",
    hours:"週一–三 11:00–17:00；週四 10:00–17:00；週五、六 10:00–19:00；週日 13:00–17:00",web:"https://stmartin-in-the-fields.org"}
 ];
+const PLACES_V23 = [
+  {name:"Tate Britain",cat:"逛",query:"Tate Britain Millbank London",address:"Millbank, London SW1P 4RG",
+   desc:"英國藝術館藏（不是河對岸的 Tate Modern）。Millais《Ophelia》在「Historic and Modern British Art: Beauty as Protest: 1845–1905」展區（2026/10/23 官網確認在展，出發前再看一次作品頁）。地鐵 Victoria 線 Pimlico 站走約 600m。Millbank 正門施工封閉到 2027，走 Atterbury St 的 Manton 入口。",
+   hours:"每天 10:00–18:00（17:30 最後入場）",price:"館藏免費",web:"https://www.tate.org.uk/visit/tate-britain"}
+];
 const NEW_TODOS_V4 = [
   ["採購","買 eSIM（確認英國能用、天數涵蓋 2/21–2/26）","2027-02-10"],
   ["採購","買旅平險（先查信用卡附帶的旅程取消／延誤保障）","2026-11-15"],
@@ -742,6 +747,10 @@ function normalize(d){
   if(!d.meta.placesV21){
     for(const x of PLACES_V21)if(!d.places.some(p=>p.name===x.name||(p.query&&p.query===x.query)))d.places.push({id:uid(),note:"",price:"",web:"",...x});
     d.meta.placesV21=true;needSave=true;
+  }
+  if(!d.meta.placesV23){
+    for(const x of PLACES_V23)if(!d.places.some(p=>p.name===x.name||(p.query&&p.query===x.query)))d.places.push({id:uid(),note:"",price:"",web:"",...x});
+    d.meta.placesV23=true;needSave=true;
   }
   if(!d.meta.placesV20){
     // 2026-10-21 從 Google 地圖清單加 18 間（橙挑的），資料讀自 Google 地圖
