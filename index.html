@@ -555,6 +555,11 @@ const PLACES_V23 = [
    desc:"英國藝術館藏（不是河對岸的 Tate Modern）。Millais《Ophelia》在「Historic and Modern British Art: Beauty as Protest: 1845–1905」展區（2026/10/23 官網確認在展，出發前再看一次作品頁）。地鐵 Victoria 線 Pimlico 站走約 600m。Millbank 正門施工封閉到 2027，走 Atterbury St 的 Manton 入口。",
    hours:"每天 10:00–18:00（17:30 最後入場）",price:"館藏免費",web:"https://www.tate.org.uk/visit/tate-britain"}
 ];
+const PLACES_V24 = [
+  {name:"Lyric Theatre（Hadestown）",cat:"劇院",query:"Lyric Theatre London",address:"29 Shaftesbury Ave, London W1D 7ES",
+   desc:"Hadestown 的劇院，Shaftesbury Avenue 上現存最老的劇院，938 席。走到 Palladium 約 10 分。TodayTix 每日抽籤 £30（10:00 開放）。⚠️ 2026/10 ATG 列的場次是週二–五 19:30、週六 15:00、週日 14:30／19:30，買票時確認 2/25（四）有沒有 14:30 場。",
+   hours:"售票口 12:00–20:00（Nimax 寫演出日開，ATG 寫週一–六；2026/10 查）",price:"£30–78（SeatPlan 2026/10/20 查）",web:"https://www.nimaxtheatres.com/nimax/lyric"}
+];
 const NEW_TODOS_V4 = [
   ["採購","買 eSIM（確認英國能用、天數涵蓋 2/21–2/26）","2027-02-10"],
   ["採購","買旅平險（先查信用卡附帶的旅程取消／延誤保障）","2026-11-15"],
@@ -751,6 +756,15 @@ function normalize(d){
   if(!d.meta.placesV23){
     for(const x of PLACES_V23)if(!d.places.some(p=>p.name===x.name||(p.query&&p.query===x.query)))d.places.push({id:uid(),note:"",price:"",web:"",...x});
     d.meta.placesV23=true;needSave=true;
+  }
+  if(!d.meta.placesV24){
+    // 2026-10-23 加 Hadestown 的劇院，並把還沒連結的 Hadestown 行程接上
+    for(const x of PLACES_V24)if(!d.places.some(p=>p.name===x.name||(p.query&&p.query===x.query)))d.places.push({id:uid(),note:"",...x});
+    const p=d.places.find(p=>p.query==="Lyric Theatre London"||p.name===PLACES_V24[0].name);
+    if(p)for(const i of d.itinerary)if(!i.placeId&&(i.place==="Lyric Theatre London"||/Hadestown/i.test(i.title||""))){
+      i.placeId=p.id;i.place=p.query||p.name;if(i.address===p.address)i.address="";
+    }
+    d.meta.placesV24=true;needSave=true;
   }
   if(!d.meta.placesV20){
     // 2026-10-21 從 Google 地圖清單加 18 間（橙挑的），資料讀自 Google 地圖
