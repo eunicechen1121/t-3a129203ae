@@ -566,6 +566,11 @@ const PLACES_V24 = [
    desc:LYRIC_DESC,
    hours:"售票口 12:00–20:00（Nimax 寫演出日開，ATG 寫週一–六；2026/10 查）",price:"£30–78（SeatPlan 2026/10/20 查）",web:"https://www.nimaxtheatres.com/nimax/lyric"}
 ];
+const PLACES_V26 = [
+  {name:"Wyndham's Theatre（John Proctor Is the Villain）",cat:"劇院",query:"Wyndham's Theatre Charing Cross Road London",address:"Charing Cross Road, London WC2H 0DA",
+   desc:"John Proctor Is the Villain 的劇院，Delfont Mackintosh 旗下。檔期 2027/2/2–4/24，限定 12 週。2/25（四）有 15:00 和 19:30 兩場（2026/11/7 官方訂票日曆確認）。約 1 小時 45 分，沒有中場。最近地鐵站 Leicester Square。售票口演出前 2 小時 30 分開，日場日兩場之間也開。",
+   hours:"售票口：演出前 2 小時 30 分開到開演後 15 分鐘（日場日兩場之間也開）",price:"",web:"https://www.delfontmackintosh.co.uk/whats-on/john-proctor-is-the-villain"}
+];
 const NEW_TODOS_V4 = [
   ["採購","買 eSIM（確認英國能用、天數涵蓋 2/21–2/26）","2027-02-10"],
   ["採購","買旅平險（先查信用卡附帶的旅程取消／延誤保障）","2026-11-15"],
@@ -777,6 +782,11 @@ function normalize(d){
     for(const x of PLACES_V25)if(!d.places.some(p=>p.name===x.name||(p.query&&p.query===x.query)))d.places.push({id:uid(),note:"",...x});
     for(const p of d.places)if(p.desc&&p.desc.includes("買票時確認 2/25（四）有沒有 14:30 場"))p.desc=LYRIC_DESC;
     d.meta.placesV25=true;needSave=true;
+  }
+  if(!d.meta.placesV26){
+    // 2026-11-07 加 John Proctor Is the Villain 的劇院（只加地點，沒排進行程）
+    for(const x of PLACES_V26)if(!d.places.some(p=>p.name===x.name||(p.query&&p.query===x.query)))d.places.push({id:uid(),note:"",...x});
+    d.meta.placesV26=true;needSave=true;
   }
   if(!d.meta.placesV20){
     // 2026-10-21 從 Google 地圖清單加 18 間（橙挑的），資料讀自 Google 地圖
